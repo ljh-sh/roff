@@ -98,10 +98,10 @@ fn cmd_bench(all: bool, count: usize) {
     let start = Instant::now();
 
     for (i, file) in files.iter().take(limit).enumerate() {
-        match man_parser::read_to_string_lossy(file) {
+        match roff::read_to_string_lossy(file) {
             Ok(content) => {
-                let _ = man_parser::parse_to_json(&content);
-                let _ = man_parser::to_markdown(&man_parser::parse_to_json(&content));
+                let _ = roff::parse_to_json(&content);
+                let _ = roff::to_markdown(&roff::parse_to_json(&content));
                 success += 1;
             }
             Err(e) => {
@@ -195,7 +195,7 @@ fn main() {
         files
             .iter()
             .map(|f| {
-                let content = man_parser::read_to_string_lossy(f).expect("failed to read file");
+                let content = roff::read_to_string_lossy(f).expect("failed to read file");
                 (f.clone(), content)
             })
             .collect()
@@ -206,7 +206,7 @@ fn main() {
     for (name, content) in inputs {
         match cmd.as_str() {
             "tojson" => {
-                let out = man_parser::parse_to_string(&content, pretty);
+                let out = roff::parse_to_string(&content, pretty);
                 if num_inputs > 1 {
                     outputs.push(format!("# File: {}\n{}", name, out));
                 } else {
@@ -214,8 +214,8 @@ fn main() {
                 }
             }
             "tomd" => {
-                let json = man_parser::parse_to_json(&content);
-                let out = man_parser::to_markdown(&json);
+                let json = roff::parse_to_json(&content);
+                let out = roff::to_markdown(&json);
                 if num_inputs > 1 {
                     outputs.push(format!("# File: {}\n{}", name, out));
                 } else {

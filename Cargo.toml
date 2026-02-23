@@ -1,15 +1,15 @@
 [package]
-name = "man_parser"
+name = "roff-cli"
 version = "0.1.0"
 edition = "2021"
-description = "A Rust roff parser for converting man pages to JSON/Markdown"
+description = "Skillful man page to JSON/Markdown converter - human readable, AI-friendly"
 license = "MIT"
 repository = "https://github.com/ljh-sh/roff"
-keywords = ["man", "roff", "parser", "markdown"]
+keywords = ["man", "roff", "parser", "markdown", "cli"]
 categories = ["text-processing", "development-tools"]
 
 [lib]
-name = "man_parser"
+name = "roff"
 path = "src/lib.rs"
 
 [[bin]]
