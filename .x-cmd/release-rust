@@ -29,25 +29,20 @@ build_target() {
         rustup target add "$target" || true
     fi
 
-    if [ "$os" = "linux" ]; then
-        if ! rustup show | grep -q "stable-x86_64-unknown-linux-gnu"; then
-            echo "  Installing linux-gnu toolchain for cross..."
-            rustup toolchain install stable-x86_64-unknown-linux-gnu --force-non-host || true
-        fi
-    fi
-
     cd "$ROFF_DIR"
 
-    if [ "$os" = "linux" ] || [ "$os" = "win" ]; then
-        if [ "$(uname)" = "Darwin" ] && [ "$(uname -m)" = "arm64" ]; then
-            echo "  Skipping: cross-rs lacks ARM64 macOS support for $os-$arch (use GitHub Actions for CI builds)"
-            return 0
+    if [ "$os" = "linux" ]; then
+        if command -v cargo-zigbuild >/dev/null 2>&1; then
+            cargo zigbuild --release --target "$target"
+        else
+            cargo build --release --target "$target"
         fi
-        if ! command -v cross >/dev/null 2>&1; then
-            echo "  Skipping: cross not installed for $os-$arch (use GitHub Actions for CI builds)"
-            return 0
+    elif [ "$os" = "win" ]; then
+        if command -v cargo-zigbuild >/dev/null 2>&1; then
+            cargo zigbuild --release --target "$target"
+        else
+            cargo build --release --target "$target"
         fi
-        cross build --release --target "$target"
     else
         cargo build --release --target "$target"
     fi
