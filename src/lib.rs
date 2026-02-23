@@ -240,6 +240,8 @@ fn format_macro(macro_name: &str, arg: &str) -> String {
         "Pq" => format!("({})", format_nested_macros(arg)), // (圆括号)
         "Nm" => format!("**{}**", format_nested_macros(arg)), // **名称**
         "St" => String::new(),                              // 标准（不输出）
+        "Ns" => format_nested_macros(arg),                  // No-space: suppress preceding space
+        "No" => format_nested_macros(arg),                  // Normal text: output as-is
         _ => format_nested_macros(arg),                     // 其他 macro 递归处理
     }
 }
@@ -283,6 +285,8 @@ fn is_inline_macro(name: &str) -> bool {
             | "Xr"
             | "Op"
             | "Pq"
+            | "Ns"  // No-space - suppresses preceding space
+            | "No" // Normal text - stays as is
     )
 }
 
