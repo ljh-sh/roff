@@ -15,14 +15,14 @@ struct Section {
 /// 表示整个 man 文档的结构
 #[derive(Default)]
 struct Doc {
-    title: Option<String>,      // 文档标题，如 "LS"
-    section: Option<String>,    // 手册 section，如 "1"
-    date: Option<String>,       // 文档日期
-    name: Option<String>,       // 命令/函数名称
-    desc: Option<String>,       // 简短描述
-    envs: Vec<String>,          // 环境变量列表
-    xrefs: Vec<String>,         // 交叉引用列表 (Xr)
-    sections: Vec<Section>,    // 所有章节的列表
+    title: Option<String>,   // 文档标题，如 "LS"
+    section: Option<String>, // 手册 section，如 "1"
+    date: Option<String>,    // 文档日期
+    name: Option<String>,    // 命令/函数名称
+    desc: Option<String>,    // 简短描述
+    envs: Vec<String>,       // 环境变量列表
+    xrefs: Vec<String>,      // 交叉引用列表 (Xr)
+    sections: Vec<Section>,  // 所有章节的列表
 }
 
 /// 去除 macro 参数的首尾空白和双引号
@@ -127,7 +127,7 @@ fn format_inline_macros(arg: &str) -> String {
                                 italic_open = false;
                             }
                             if i + 3 < chars.len() {
-                                let cw: String = chars[i+2..i+4].iter().collect();
+                                let cw: String = chars[i + 2..i + 4].iter().collect();
                                 if cw == "CW" || cw == "cw" {
                                     result.push('`');
                                     i += 4;
@@ -212,11 +212,12 @@ fn format_inline_macros(arg: &str) -> String {
 /// 例如: .Fl a -> -a, .Ar file -> _file_, .Pq x -> (x)
 fn format_macro(macro_name: &str, arg: &str) -> String {
     match macro_name {
-        "Op" => format!("[{}]", format_nested_macros(arg)),      // [可选参数]
-        "Ar" => format!("_{}_", format_nested_macros(arg)),       // _参数_
+        "Op" => format!("[{}]", format_nested_macros(arg)), // [可选参数]
+        "Ar" => format!("_{}_", format_nested_macros(arg)), // _参数_
         "Fl" => format!("-{}", format_nested_macros(arg).trim_start_matches('-')), // -选项
-        "Pa" => format_nested_macros(arg),                        // 文件路径（保持原样）
-        "Xr" => {                                                  // 交叉引用，如 ls(1)
+        "Pa" => format_nested_macros(arg),                  // 文件路径（保持原样）
+        "Xr" => {
+            // 交叉引用，如 ls(1)
             let parts: Vec<&str> = arg.trim().split_whitespace().collect();
             if parts.len() >= 2 {
                 format!("**{}**({})", parts[0], parts[1])
@@ -226,20 +227,20 @@ fn format_macro(macro_name: &str, arg: &str) -> String {
                 String::new()
             }
         }
-        "Li" => format!("`{}`", format_nested_macros(arg)),       // `代码`
-        "Va" => format!("_{}_", format_nested_macros(arg)),        // _变量_
-        "Ev" => format!("_{}_", format_nested_macros(arg)),        // _环境变量_
-        "Cm" => format!("**{}**", format_nested_macros(arg)),      // **命令**
-        "Tn" => format_nested_macros(arg),                         // 技术术语（保持原样）
-        "Sq" => format!("'{}'", format_nested_macros(arg)),       // '单引号'
-        "Ql" => format!("`{}`", format_nested_macros(arg)),       // `原义`
-        "Dq" => format!("\"{}\"", format_nested_macros(arg)),      // "双引号"
-        "Em" => format!("_{}_", format_nested_macros(arg)),        // _强调_
-        "Sy" => format!("**{}**", format_nested_macros(arg)),     // **粗体**
-        "Pq" => format!("({})", format_nested_macros(arg)),       // (圆括号)
-        "Nm" => format!("**{}**", format_nested_macros(arg)),     // **名称**
-        "St" => String::new(),                                     // 标准（不输出）
-        _ => format_nested_macros(arg),                            // 其他 macro 递归处理
+        "Li" => format!("`{}`", format_nested_macros(arg)), // `代码`
+        "Va" => format!("_{}_", format_nested_macros(arg)), // _变量_
+        "Ev" => format!("_{}_", format_nested_macros(arg)), // _环境变量_
+        "Cm" => format!("**{}**", format_nested_macros(arg)), // **命令**
+        "Tn" => format_nested_macros(arg),                  // 技术术语（保持原样）
+        "Sq" => format!("'{}'", format_nested_macros(arg)), // '单引号'
+        "Ql" => format!("`{}`", format_nested_macros(arg)), // `原义`
+        "Dq" => format!("\"{}\"", format_nested_macros(arg)), // "双引号"
+        "Em" => format!("_{}_", format_nested_macros(arg)), // _强调_
+        "Sy" => format!("**{}**", format_nested_macros(arg)), // **粗体**
+        "Pq" => format!("({})", format_nested_macros(arg)), // (圆括号)
+        "Nm" => format!("**{}**", format_nested_macros(arg)), // **名称**
+        "St" => String::new(),                              // 标准（不输出）
+        _ => format_nested_macros(arg),                     // 其他 macro 递归处理
     }
 }
 
@@ -264,16 +265,34 @@ fn format_nested_macros(arg: &str) -> String {
 
 /// 检查是否是 inline macro（不需要换行的行内 macro）
 fn is_inline_macro(name: &str) -> bool {
-    matches!(name, "Fl" | "Ar" | "Nm" | "Pa" | "Cm" | "Va" | "Ev" | "Li" | "Sy" | "Em" | "Sq" | "Ql" | "Dq" | "Tn" | "Xr" | "Op" | "Pq")
+    matches!(
+        name,
+        "Fl" | "Ar"
+            | "Nm"
+            | "Pa"
+            | "Cm"
+            | "Va"
+            | "Ev"
+            | "Li"
+            | "Sy"
+            | "Em"
+            | "Sq"
+            | "Ql"
+            | "Dq"
+            | "Tn"
+            | "Xr"
+            | "Op"
+            | "Pq"
+    )
 }
 
 /// 将 man 文档内容解析为 JSON Value
 /// 这是核心解析函数，逐行处理 roff macro
 pub fn parse_to_json(input: &str) -> Value {
-    let mut doc = Doc::default();      // 整个文档
+    let mut doc = Doc::default(); // 整个文档
     let mut current = Section::default(); // 当前正在处理的章节
     let mut have_section = bool::default(); // 是否已经有章节
-    let mut found_header = false;      // 是否已经找到文档标题 (.Dt/.TH)
+    let mut found_header = false; // 是否已经找到文档标题 (.Dt/.TH)
 
     // 逐行解析输入
     for raw in input.lines() {
@@ -324,10 +343,19 @@ pub fn parse_to_json(input: &str) -> Value {
         }
 
         // 忽略格式化指令：.ad .na .hy .br .sp .nr 等
-        if line == ".ad" || line == ".na" || line.starts_with(".hy") ||
-           line == ".br" || line == ".sp" || line.starts_with(".nr") ||
-           line == ".ns" || line == ".rs" || line.starts_with(".ll") ||
-           line.starts_with(".ta") || line == ".fi" || line == ".nf" {
+        if line == ".ad"
+            || line == ".na"
+            || line.starts_with(".hy")
+            || line == ".br"
+            || line == ".sp"
+            || line.starts_with(".nr")
+            || line == ".ns"
+            || line == ".rs"
+            || line.starts_with(".ll")
+            || line.starts_with(".ta")
+            || line == ".fi"
+            || line == ".nf"
+        {
             continue;
         }
 
@@ -375,7 +403,8 @@ pub fn parse_to_json(input: &str) -> Value {
 
         // .Xr NAME SECTION - 交叉引用（收集到列表中）
         if line.starts_with(".Xr ") {
-            let xref = trim_macro_arg(&line[4..]);
+            let mut xref = trim_macro_arg(&line[4..]);
+            xref = xref.trim_end_matches(',').trim().to_string();
             if !xref.is_empty() && !doc.xrefs.contains(&xref) {
                 doc.xrefs.push(xref);
             }
@@ -383,19 +412,25 @@ pub fn parse_to_json(input: &str) -> Value {
         }
 
         // .Bl - 开始列表（tagged list, enum 等）
-        if line.starts_with(".Bl") || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "Bl") {
+        if line.starts_with(".Bl")
+            || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "Bl")
+        {
             current.in_list = true;
             continue;
         }
 
         // .El - 结束列表
-        if line.starts_with(".El") || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "El") {
+        if line.starts_with(".El")
+            || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "El")
+        {
             current.in_list = false;
             continue;
         }
 
         // .It - 列表项
-        if line.starts_with(".It") || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "It") {
+        if line.starts_with(".It")
+            || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "It")
+        {
             let arg = line.get(3..).unwrap_or("").trim();
             if current.in_list {
                 if !arg.is_empty() {
@@ -422,11 +457,7 @@ pub fn parse_to_json(input: &str) -> Value {
         // 在列表内处理 macro 行（重要：添加到 items 而不是 text）
         if current.in_list && line.starts_with('.') && line.len() > 2 {
             let macro_part = &line[1..3];
-            let rest = if line.len() > 3 {
-                line[3..].trim()
-            } else {
-                ""
-            };
+            let rest = if line.len() > 3 { line[3..].trim() } else { "" };
             let formatted = format_macro(macro_part, rest);
             if !formatted.is_empty() {
                 if let Some(last) = current.items.last_mut() {
@@ -440,11 +471,7 @@ pub fn parse_to_json(input: &str) -> Value {
         }
         if line.starts_with('.') && line.len() > 2 {
             let macro_part = &line[1..3];
-            let rest = if line.len() > 3 {
-                line[3..].trim()
-            } else {
-                ""
-            };
+            let rest = if line.len() > 3 { line[3..].trim() } else { "" };
             let formatted = format_macro(macro_part, rest);
             if !formatted.is_empty() {
                 push_text(&mut current, &formatted);
@@ -459,11 +486,7 @@ pub fn parse_to_json(input: &str) -> Value {
                 let trimmed = line.trim();
                 if trimmed.starts_with('.') && trimmed.len() > 2 {
                     let macro_part = &trimmed[1..3];
-                    let rest = if trimmed.len() > 3 {
-                        &trimmed[3..]
-                    } else {
-                        ""
-                    };
+                    let rest = if trimmed.len() > 3 { &trimmed[3..] } else { "" };
                     let formatted = format_macro(macro_part, rest.trim());
                     if !formatted.is_empty() {
                         if !last.is_empty() {
