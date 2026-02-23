@@ -73,8 +73,16 @@ fn cmd_tomd_help() -> ! {
 fn cmd_view_help() -> ! {
     eprintln!("roff-view - Progressive disclosure view for man pages");
     eprintln!("");
-    eprintln!("Usage: roff view [options] <file>");
-    eprintln!("       roff view -- < file.1");
+    eprintln!("Usage: roff view [options] <query>...");
+    eprintln!("       roff view [options] <file>...");
+    eprintln!("       roff view [options] -            # read from stdin");
+    eprintln!("");
+    eprintln!("Query formats:");
+    eprintln!("  roff view ls                   # Search 'ls' in manpath");
+    eprintln!("  roff view ls 1                 # Search 'ls' in section 1");
+    eprintln!("  roff view git ls                # Search multiple in manpath");
+    eprintln!("  roff view /path/to/file.1      # Direct file path");
+    eprintln!("  cat file.1 | roff view -        # Read from stdin");
     eprintln!("");
     eprintln!("Options:");
     eprintln!("  --description      Show NAME + description");
@@ -93,14 +101,15 @@ fn cmd_view_help() -> ! {
     eprintln!("  -h, --help         Show this help message");
     eprintln!("");
     eprintln!("Examples:");
-    eprintln!("  roff view file.1                  # Show meta (default)");
-    eprintln!("  roff view --synopsis file.1       # Show synopsis only");
-    eprintln!(
-        "  roff view --meta file.1           # Show description + synopsis + see-also + outline"
-    );
-    eprintln!("  roff view --outline file.1        # Show all section titles");
-    eprintln!("  roff view --outline-head 3 file.1 # Show outline + 3 lines preview");
-    eprintln!("  roff view --all file.1            # Show everything");
+    eprintln!("  roff view ls                       # Search 'ls' in manpath");
+    eprintln!("  roff view ls 1                     # Search 'ls' in section 1");
+    eprintln!("  roff view git ls                   # Search multiple: 'git' and 'ls'");
+    eprintln!("  roff view --synopsis ls            # Show synopsis of 'ls'");
+    eprintln!("  roff view --meta ls                # Show meta of 'ls'");
+    eprintln!("  roff view --outline ls             # Show outline of 'ls'");
+    eprintln!("  roff view --outline-head 3 ls      # Show outline + 3 lines");
+    eprintln!("  roff view /path/to/file.1         # View specific file");
+    eprintln!("  cat file.1 | roff view -           # Read from stdin");
     process::exit(0);
 }
 
@@ -282,12 +291,16 @@ fn main() {
 
     if cmd == "view" {
         let mut view_args = Vec::new();
-        let mut files = Vec::new();
+        let mut queries = Vec::new();
+        let mut section: Option<String> = None;
+        let mut use_stdin = false;
 
         let mut i = 1;
         while i < args.len() {
             if args[i] == "-h" || args[i] == "--help" {
                 cmd_view_help();
+            } else if args[i] == "--" {
+                use_stdin = true;
             } else if args[i].starts_with("--outline-head=") {
                 view_args.push(args[i].clone());
             } else if args[i] == "--outline-head" {
@@ -299,24 +312,65 @@ fn main() {
                 }
             } else if args[i].starts_with('-') {
                 view_args.push(args[i].clone());
+            } else if args[i].chars().all(|c| c.is_ascii_digit()) {
+                section = Some(args[i].clone());
             } else {
-                files.push(args[i].clone());
+                queries.push(args[i].clone());
             }
             i += 1;
         }
 
         let opts = roff::ViewOptions::from_args(&view_args);
 
-        if files.is_empty() {
+        if use_stdin || queries.is_empty() {
             let content = read_all_from_stdin().expect("failed to read stdin");
             let json = roff::parse_to_json(&content);
             println!("{}", roff::view(&json, &opts));
-        } else {
-            for f in files {
-                let content = roff::read_to_string_lossy(&f).expect("failed to read file");
+            return;
+        }
+
+        for query in queries {
+            if query.contains('/') || query.contains('.') {
+                let content = roff::read_to_string_lossy(&query).expect("failed to read file");
                 let json = roff::parse_to_json(&content);
                 println!("{}", roff::view(&json, &opts));
+                continue;
             }
+
+            let manpaths = get_manpath();
+            let mut found_file = String::new();
+
+            if let Some(sec) = &section {
+                for manpath in &manpaths {
+                    let path = format!("{}/man{}/{}.{}", manpath, sec, query, sec);
+                    if std::path::Path::new(&path).exists() {
+                        found_file = path;
+                        break;
+                    }
+                }
+            } else {
+                for sec in 1..=9 {
+                    for manpath in &manpaths {
+                        let path = format!("{}/man{}/{}.{}", manpath, sec, query, sec);
+                        if std::path::Path::new(&path).exists() {
+                            found_file = path;
+                            break;
+                        }
+                    }
+                    if !found_file.is_empty() {
+                        break;
+                    }
+                }
+            }
+
+            if found_file.is_empty() {
+                eprintln!("Error: Could not find man page for '{}' in manpath", query);
+                continue;
+            }
+
+            let content = roff::read_to_string_lossy(&found_file).expect("failed to read file");
+            let json = roff::parse_to_json(&content);
+            println!("{}", roff::view(&json, &opts));
         }
         return;
     }
