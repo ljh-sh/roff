@@ -5,8 +5,20 @@ set -e
 
 init_common() {
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-    PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-    OUT_DIR="$PROJECT_DIR/.release-artifacts"
+
+    if [ -n "$PROJECT_DIR" ]; then
+        PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
+    else
+        PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+    fi
+
+    if [ -n "$OUT_DIR" ]; then
+        OUT_DIR="$(cd "$OUT_DIR" && pwd)"
+    else
+        OUT_DIR="$PROJECT_DIR/.release-artifacts"
+    fi
+
+    BIN_NAME="${BIN_NAME:-app}"
     BUILD_MODE="${BUILD_MODE:-native-first}"
 }
 
@@ -126,13 +138,19 @@ EOF
 show_usage() {
     echo "Usage: $0 [command] [options]"
     echo ""
+    echo "Environment variables:"
+    echo "  PROJECT_DIR       Project directory (default: script parent dir)"
+    echo "  OUT_DIR          Output directory (default: PROJECT_DIR/.release-artifacts)"
+    echo "  BIN_NAME         Binary name (default: app)"
+    echo "  BUILD_MODE       Build mode: native-first or zigbuild-first"
+    echo ""
     echo "Commands:"
     echo "  all              Build all targets"
     echo "  <target>         Build specific target (see below)"
     echo ""
     echo "Options:"
-    echo "  --zigbuild-first    Use zigbuild for all cross-compilation (default: native-first)"
-    echo "  --native-first     Use native cargo when possible, fallback to zigbuild"
+    echo "  --zigbuild-first    Use zigbuild for all cross-compilation"
+    echo "  --native-first     Use native cargo when possible (default)"
     echo ""
     echo "Targets:"
     echo "  win-x64          x86_64-pc-windows-gnu"
