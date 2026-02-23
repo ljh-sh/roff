@@ -31,20 +31,24 @@ build_target() {
 
     cd "$ROFF_DIR"
 
-    if [ "$os" = "linux" ]; then
-        if command -v cargo-zigbuild >/dev/null 2>&1; then
-            cargo zigbuild --release --target "$target"
-        else
-            cargo build --release --target "$target"
-        fi
-    elif [ "$os" = "win" ]; then
-        if command -v cargo-zigbuild >/dev/null 2>&1; then
-            cargo zigbuild --release --target "$target"
-        else
-            cargo build --release --target "$target"
-        fi
-    else
+    local is_native=false
+    case "$(uname)" in
+        Darwin)
+            [ "$os" = "darwin" ] && is_native=true
+            ;;
+        Linux)
+            [ "$os" = "linux" ] && is_native=true
+            ;;
+    esac
+
+    if [ "$is_native" = "true" ]; then
         cargo build --release --target "$target"
+    elif command -v cargo-zigbuild >/dev/null 2>&1; then
+        cargo zigbuild --release --target "$target"
+    else
+        echo "  Error: cross-compilation requires cargo-zigbuild"
+        echo "  Install: cargo install cargo-zigbuild"
+        return 1
     fi
 
     local src="target/$target/release/${BIN_NAME}${ext}"
