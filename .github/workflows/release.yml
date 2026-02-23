@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        config:
+          - {target: x86_64-unknown-linux-musl, os: ubuntu-latest, ext: ""}
+          - {target: aarch64-unknown-linux-musl, os: ubuntu-latest, ext: ""}
+          - {target: x86_64-pc-windows-gnu, os: windows-latest, ext: ".exe"}
+          - {target: aarch64-apple-darwin, os: macos-latest, ext: ""}
+          - {target: x86_64-apple-darwin, os: macos-latest, ext: ""}
+
+    name: ${{ matrix.config.target }}
+    runs-on: ${{ matrix.config.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.config.target }}
+
+      - name: Install cross
+        if: matrix.config.os == 'ubuntu-latest'
+        run: cargo install cross
+
+      - name: Build
+        run: |
+          if [ "${{ matrix.config.os }}" = "ubuntu-latest" ]; then
+            cross build --release --target ${{ matrix.config.target }}
+          else
+            cargo build --release --target ${{ matrix.config.target }}
+          fi
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p dist/${{ matrix.config.target }}/bin
+          cp target/${{ matrix.config.target }}/release/roff${{ matrix.config.ext }} dist/${{ matrix.config.target }}/bin/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: roff-${{ matrix.config.target }}
+          path: dist/${{ matrix.config.target }}
+
+      - name: Upload to release
+        if: github.event_name == 'release'
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref }}
+          overwrite: true
+          file: dist/${{ matrix.config.target }}/*

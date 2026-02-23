@@ -1,0 +1,104 @@
+
+set -e
+
+ROFF_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+OUT_DIR="$ROFF_DIR/.release-artifacts"
+BIN_NAME="roff"
+
+TARGETS=(
+    "x86_64-pc-windows-gnu:win:x64"
+    "x86_64-apple-darwin:darwin:x64"
+    "aarch64-apple-darwin:darwin:arm64"
+    "x86_64-unknown-linux-musl:linux:x64"
+    "aarch64-unknown-linux-musl:linux:arm64"
+)
+
+build_target() {
+    local target="$1"
+    local os="$2"
+    local arch="$3"
+    local out_subdir="${os}-${arch}/bin"
+    local ext=""
+
+    [ "$os" = "win" ] && ext=".exe"
+
+    echo "Building for $os-$arch ($target)..."
+
+    if ! rustup target list --installed | grep -q "^${target}$"; then
+        echo "  Installing target $target..."
+        rustup target add "$target" || true
+    fi
+
+    if [ "$os" = "linux" ]; then
+        if ! rustup show | grep -q "stable-x86_64-unknown-linux-gnu"; then
+            echo "  Installing linux-gnu toolchain for cross..."
+            rustup toolchain install stable-x86_64-unknown-linux-gnu --force-non-host || true
+        fi
+    fi
+
+    cd "$ROFF_DIR"
+
+    if [ "$os" = "linux" ] || [ "$os" = "win" ]; then
+        if [ "$(uname)" = "Darwin" ] && [ "$(uname -m)" = "arm64" ]; then
+            echo "  Skipping: cross-rs lacks ARM64 macOS support for $os-$arch (use GitHub Actions for CI builds)"
+            return 0
+        fi
+        if ! command -v cross >/dev/null 2>&1; then
+            echo "  Skipping: cross not installed for $os-$arch (use GitHub Actions for CI builds)"
+            return 0
+        fi
+        cross build --release --target "$target"
+    else
+        cargo build --release --target "$target"
+    fi
+
+    local src="target/$target/release/${BIN_NAME}${ext}"
+    local dst="$OUT_DIR/$out_subdir/${BIN_NAME}${ext}"
+
+    if [ ! -f "$src" ]; then
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$dst")"
+    cp "$src" "$dst"
+    echo "  -> $dst"
+}
+
+build_all() {
+    rm -rf "$OUT_DIR"
+    mkdir -p "$OUT_DIR"
+
+    for entry in "${TARGETS[@]}"; do
+        IFS=: read -r target os arch <<< "$entry"
+        build_target "$target" "$os" "$arch"
+    done
+
+    echo ""
+    echo "Done! Artifacts in: $OUT_DIR"
+    ls -la "$OUT_DIR"/*/
+}
+
+case "${1:-all}" in
+    all)
+        build_all
+        ;;
+    win-x64|x86_64-pc-windows-gnu)
+        build_target "x86_64-pc-windows-gnu" "win" "x64"
+        ;;
+    darwin-x64|x86_64-apple-darwin)
+        build_target "x86_64-apple-darwin" "darwin" "x64"
+        ;;
+    darwin-arm64|aarch64-apple-darwin)
+        build_target "aarch64-apple-darwin" "darwin" "arm64"
+        ;;
+    linux-x64|x86_64-unknown-linux-musl)
+        build_target "x86_64-unknown-linux-musl" "linux" "x64"
+        ;;
+    linux-arm64|aarch64-unknown-linux-musl)
+        build_target "aarch64-unknown-linux-musl" "linux" "arm64"
+        ;;
+    *)
+        echo "Usage: $0 [all|win-x64|darwin-x64|darwin-arm64|linux-x64|linux-arm64]"
+        exit 1
+        ;;
+esac
