@@ -13,39 +13,112 @@ fn read_all_from_stdin() -> io::Result<String> {
 }
 
 fn usage() -> ! {
-    eprintln!("Usage: roff tojson [--pretty] <file>...");
-    eprintln!("       roff tomd <file>...");
-    eprintln!("       roff view [options] <file>");
-    eprintln!("       roff bench [--count N] [--all]");
-    eprintln!("       roff tojson --        # read from stdin");
-    eprintln!("       roff tomd --          # read from stdin");
+    eprintln!("roff - Skillful man page to JSON/Markdown converter");
+    eprintln!("");
+    eprintln!("Usage: roff <command> [options] [arguments]");
     eprintln!("");
     eprintln!("Commands:");
-    eprintln!("  tojson  Convert man file(s) to JSON");
-    eprintln!("  tomd    Convert man file(s) to Markdown");
-    eprintln!("  view    Progressive disclosure view");
-    eprintln!("  bench   Benchmark roff on manpath files");
+    eprintln!("  tojson          Convert man file(s) to JSON");
+    eprintln!("  tomd            Convert man file(s) to Markdown");
+    eprintln!("  view            Progressive disclosure view");
+    eprintln!("  bench           Benchmark parser performance");
     eprintln!("");
-    eprintln!("View options:");
-    eprintln!("  --description     Show NAME + description");
-    eprintln!("  --synopsis       Show SYNOPSIS");
-    eprintln!("  --options        Show OPTIONS");
-    eprintln!("  --environment    Show ENVIRONMENT");
-    eprintln!("  --files         Show FILES");
-    eprintln!("  --exit-status    Show EXIT STATUS");
-    eprintln!("  --see-also      Show SEE ALSO");
-    eprintln!("  --examples       Show EXAMPLES");
-    eprintln!("  --author        Show AUTHOR");
-    eprintln!("  --outline        Show section titles not displayed");
-    eprintln!("  --outline-head N Show outline + first N lines");
-    eprintln!("  --meta           Shortcut: --description --synopsis --see-also --outline");
-    eprintln!("  --all            Show all sections");
+    eprintln!("Examples:");
+    eprintln!("  roff tojson file.1           # Convert to JSON");
+    eprintln!("  roff tomd file.1             # Convert to Markdown");
+    eprintln!("  roff view --synopsis file.1  # View synopsis only");
+    eprintln!("  roff bench --all              # Benchmark all man files");
+    eprintln!("  roff tojson -- < file.1      # Read from stdin");
+    eprintln!("");
+    eprintln!("Run 'roff <command> --help' for more details on a command.");
+    eprintln!("");
+    eprintln!("For full documentation, see: https://github.com/ljh-sh/roff");
+    process::exit(1);
+}
+
+fn cmd_tojson_help() -> ! {
+    eprintln!("roff-tojson - Convert man pages to JSON");
+    eprintln!("");
+    eprintln!("Usage: roff tojson [options] <file>...");
+    eprintln!("       roff tojson -- < file.1");
     eprintln!("");
     eprintln!("Options:");
-    eprintln!("  --pretty  Pretty-print JSON output (tojson only)");
-    eprintln!("  --count N Process first N files (bench only, default 10)");
-    eprintln!("  --all     Process all files in manpath (bench only)");
-    process::exit(1);
+    eprintln!("  --pretty    Pretty-print JSON output");
+    eprintln!("  -h, --help  Show this help message");
+    eprintln!("");
+    eprintln!("Examples:");
+    eprintln!("  roff tojson file.1");
+    eprintln!("  roff tojson --pretty file.1");
+    eprintln!("  roff tojson --pretty file.1 file.2");
+    eprintln!("  cat file.1 | roff tojson --");
+    process::exit(0);
+}
+
+fn cmd_tomd_help() -> ! {
+    eprintln!("roff-tomd - Convert man pages to Markdown");
+    eprintln!("");
+    eprintln!("Usage: roff tomd <file>...");
+    eprintln!("       roff tomd -- < file.1");
+    eprintln!("");
+    eprintln!("Options:");
+    eprintln!("  -h, --help  Show this help message");
+    eprintln!("");
+    eprintln!("Examples:");
+    eprintln!("  roff tomd file.1");
+    eprintln!("  roff tomd file.1 file.2");
+    eprintln!("  cat file.1 | roff tomd --");
+    process::exit(0);
+}
+
+fn cmd_view_help() -> ! {
+    eprintln!("roff-view - Progressive disclosure view for man pages");
+    eprintln!("");
+    eprintln!("Usage: roff view [options] <file>");
+    eprintln!("       roff view -- < file.1");
+    eprintln!("");
+    eprintln!("Options:");
+    eprintln!("  --description      Show NAME + description");
+    eprintln!("  --synopsis         Show SYNOPSIS section");
+    eprintln!("  --options          Show OPTIONS section");
+    eprintln!("  --environment      Show ENVIRONMENT section");
+    eprintln!("  --files            Show FILES section");
+    eprintln!("  --exit-status      Show EXIT STATUS section");
+    eprintln!("  --see-also         Show SEE ALSO section");
+    eprintln!("  --examples         Show EXAMPLES section");
+    eprintln!("  --author           Show AUTHOR section");
+    eprintln!("  --outline          Show section titles not displayed");
+    eprintln!("  --outline-head N   Show outline + first N lines of each section");
+    eprintln!("  --meta             Shortcut: --description --synopsis --see-also --outline");
+    eprintln!("  --all              Show all sections");
+    eprintln!("  -h, --help         Show this help message");
+    eprintln!("");
+    eprintln!("Examples:");
+    eprintln!("  roff view file.1                  # Show meta (default)");
+    eprintln!("  roff view --synopsis file.1       # Show synopsis only");
+    eprintln!(
+        "  roff view --meta file.1           # Show description + synopsis + see-also + outline"
+    );
+    eprintln!("  roff view --outline file.1        # Show all section titles");
+    eprintln!("  roff view --outline-head 3 file.1 # Show outline + 3 lines preview");
+    eprintln!("  roff view --all file.1            # Show everything");
+    process::exit(0);
+}
+
+fn cmd_bench_help() -> ! {
+    eprintln!("roff-bench - Benchmark parser performance on man files");
+    eprintln!("");
+    eprintln!("Usage: roff bench [options]");
+    eprintln!("");
+    eprintln!("Options:");
+    eprintln!("  --count N    Process first N files (default: 10)");
+    eprintln!("  --all       Process all files in manpath");
+    eprintln!("  -h, --help  Show this help message");
+    eprintln!("");
+    eprintln!("Examples:");
+    eprintln!("  roff bench                 # Benchmark first 10 files");
+    eprintln!("  roff bench --count 100     # Benchmark first 100 files");
+    eprintln!("  roff bench --all           # Benchmark all man files");
+    process::exit(0);
 }
 
 fn get_manpath() -> Vec<String> {
@@ -162,12 +235,35 @@ fn main() {
 
     let cmd = &args[0];
 
+    if cmd == "-h" || cmd == "--help" {
+        usage();
+    }
+
+    if cmd == "help" {
+        if args.len() > 1 {
+            match args[1].as_str() {
+                "tojson" => cmd_tojson_help(),
+                "tomd" => cmd_tomd_help(),
+                "view" => cmd_view_help(),
+                "bench" => cmd_bench_help(),
+                _ => {
+                    eprintln!("Unknown command: {}", args[1]);
+                    usage();
+                }
+            }
+        } else {
+            usage();
+        }
+    }
+
     if cmd == "bench" {
         let mut all = false;
         let mut count = 10usize;
         let mut i = 1;
         while i < args.len() {
-            if args[i] == "--all" {
+            if args[i] == "-h" || args[i] == "--help" {
+                cmd_bench_help();
+            } else if args[i] == "--all" {
                 all = true;
             } else if args[i] == "--count" {
                 i += 1;
@@ -190,7 +286,9 @@ fn main() {
 
         let mut i = 1;
         while i < args.len() {
-            if args[i].starts_with("--outline-head=") {
+            if args[i] == "-h" || args[i] == "--help" {
+                cmd_view_help();
+            } else if args[i].starts_with("--outline-head=") {
                 view_args.push(args[i].clone());
             } else if args[i] == "--outline-head" {
                 if i + 1 < args.len() && !args[i + 1].starts_with('-') {
@@ -228,7 +326,13 @@ fn main() {
     let mut use_stdin = false;
     let mut i = 1;
     while i < args.len() {
-        if args[i] == "--pretty" {
+        if args[i] == "-h" || args[i] == "--help" {
+            match cmd.as_str() {
+                "tojson" => cmd_tojson_help(),
+                "tomd" => cmd_tomd_help(),
+                _ => usage(),
+            }
+        } else if args[i] == "--pretty" {
             pretty = true;
         } else if args[i] == "--" {
             use_stdin = true;
