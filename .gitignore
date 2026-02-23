@@ -4,4 +4,4 @@ Cargo.lock
 *.swo
 *~
 .DS_Store
-releaseroff/.release-artifacts/
+**/.release-artifacts/
