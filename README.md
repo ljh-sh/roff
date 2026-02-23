@@ -38,14 +38,19 @@ roff tomd -- < file.1
 
 ### Progressive Disclosure (view)
 
-View man pages in parts - great for AI agents and quick inspection.
+View man pages in parts - great for AI agents and quick inspection. Multiple options can be combined.
 
 ```bash
-# View specific sections
+# View specific sections (can combine multiple)
 roff view --description file.1      # NAME + description
 roff view --synopsis file.1          # SYNOPSIS section
 roff view --options file.1           # OPTIONS section
 roff view --see-also file.1         # SEE ALSO section
+
+# Combine multiple options
+roff view --description --synopsis file.1   # Show description + synopsis
+roff view --options --examples file.1        # Show options + examples
+roff view --description --synopsis --see-also --environment file.1  # Show multiple
 
 # Combined views (most useful)
 roff view --meta file.1              # description + synopsis + see-also + outline
