@@ -15,6 +15,7 @@ fn read_all_from_stdin() -> io::Result<String> {
 fn usage() -> ! {
     eprintln!("Usage: roff tojson [--pretty] <file>...");
     eprintln!("       roff tomd <file>...");
+    eprintln!("       roff view [options] <file>");
     eprintln!("       roff bench [--count N] [--all]");
     eprintln!("       roff tojson --        # read from stdin");
     eprintln!("       roff tomd --          # read from stdin");
@@ -22,7 +23,23 @@ fn usage() -> ! {
     eprintln!("Commands:");
     eprintln!("  tojson  Convert man file(s) to JSON");
     eprintln!("  tomd    Convert man file(s) to Markdown");
+    eprintln!("  view    Progressive disclosure view");
     eprintln!("  bench   Benchmark roff on manpath files");
+    eprintln!("");
+    eprintln!("View options:");
+    eprintln!("  --description     Show NAME + description");
+    eprintln!("  --synopsis       Show SYNOPSIS");
+    eprintln!("  --options        Show OPTIONS");
+    eprintln!("  --environment    Show ENVIRONMENT");
+    eprintln!("  --files         Show FILES");
+    eprintln!("  --exit-status    Show EXIT STATUS");
+    eprintln!("  --see-also      Show SEE ALSO");
+    eprintln!("  --examples       Show EXAMPLES");
+    eprintln!("  --author        Show AUTHOR");
+    eprintln!("  --outline        Show section titles not displayed");
+    eprintln!("  --outline-head N Show outline + first N lines");
+    eprintln!("  --meta           Shortcut: --description --synopsis --see-also --outline");
+    eprintln!("  --all            Show all sections");
     eprintln!("");
     eprintln!("Options:");
     eprintln!("  --pretty  Pretty-print JSON output (tojson only)");
@@ -164,6 +181,45 @@ fn main() {
             i += 1;
         }
         cmd_bench(all, count);
+        return;
+    }
+
+    if cmd == "view" {
+        let mut view_args = Vec::new();
+        let mut files = Vec::new();
+
+        let mut i = 1;
+        while i < args.len() {
+            if args[i].starts_with("--outline-head=") {
+                view_args.push(args[i].clone());
+            } else if args[i] == "--outline-head" {
+                if i + 1 < args.len() && !args[i + 1].starts_with('-') {
+                    view_args.push(format!("--outline-head={}", args[i + 1]));
+                    i += 1;
+                } else {
+                    view_args.push(args[i].clone());
+                }
+            } else if args[i].starts_with('-') {
+                view_args.push(args[i].clone());
+            } else {
+                files.push(args[i].clone());
+            }
+            i += 1;
+        }
+
+        let opts = roff::ViewOptions::from_args(&view_args);
+
+        if files.is_empty() {
+            let content = read_all_from_stdin().expect("failed to read stdin");
+            let json = roff::parse_to_json(&content);
+            println!("{}", roff::view(&json, &opts));
+        } else {
+            for f in files {
+                let content = roff::read_to_string_lossy(&f).expect("failed to read file");
+                let json = roff::parse_to_json(&content);
+                println!("{}", roff::view(&json, &opts));
+            }
+        }
         return;
     }
 

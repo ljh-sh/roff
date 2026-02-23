@@ -688,3 +688,205 @@ pub fn to_markdown(json: &Value) -> String {
     }
     out.trim_end().to_string()
 }
+
+#[derive(Default)]
+pub struct ViewOptions {
+    pub description: bool,
+    pub synopsis: bool,
+    pub options: bool,
+    pub environment: bool,
+    pub files: bool,
+    pub exit_status: bool,
+    pub see_also: bool,
+    pub examples: bool,
+    pub author: bool,
+    pub outline: bool,
+    pub outline_head: Option<usize>,
+    pub meta: bool,
+    pub all: bool,
+}
+
+impl ViewOptions {
+    pub fn from_args(args: &[String]) -> Self {
+        let mut opts = ViewOptions::default();
+
+        for arg in args {
+            match arg.as_str() {
+                "--description" => opts.description = true,
+                "--synopsis" => opts.synopsis = true,
+                "--options" => opts.options = true,
+                "--environment" => opts.environment = true,
+                "--files" => opts.files = true,
+                "--exit-status" => opts.exit_status = true,
+                "--see-also" | "--seealso" => opts.see_also = true,
+                "--examples" => opts.examples = true,
+                "--author" => opts.author = true,
+                "--outline" => opts.outline = true,
+                "--outline-head" => {}
+                _ if arg.starts_with("--outline-head=") => {
+                    if let Ok(n) = arg.trim_start_matches("--outline-head=").parse() {
+                        opts.outline_head = Some(n);
+                    }
+                }
+                "--meta" => opts.meta = true,
+                "--all" => opts.all = true,
+                _ => {}
+            }
+        }
+
+        if opts.meta {
+            opts.description = true;
+            opts.synopsis = true;
+            opts.see_also = true;
+            opts.outline = true;
+        }
+
+        if opts.all {
+            opts.description = true;
+            opts.synopsis = true;
+            opts.options = true;
+            opts.environment = true;
+            opts.files = true;
+            opts.exit_status = true;
+            opts.see_also = true;
+            opts.examples = true;
+            opts.author = true;
+        }
+
+        opts
+    }
+
+    pub fn is_empty(&self) -> bool {
+        !self.description
+            && !self.synopsis
+            && !self.options
+            && !self.environment
+            && !self.files
+            && !self.exit_status
+            && !self.see_also
+            && !self.examples
+            && !self.author
+            && !self.outline
+            && self.outline_head.is_none()
+            && !self.meta
+            && !self.all
+    }
+}
+
+fn section_match(title: &str, opts: &ViewOptions) -> bool {
+    let t = title.to_uppercase();
+    match t.as_str() {
+        "NAME" => opts.description,
+        "SYNOPSIS" => opts.synopsis,
+        "OPTIONS" => opts.options,
+        "ENVIRONMENT" | "ENV" => opts.environment,
+        "FILES" => opts.files,
+        "EXIT STATUS" | "EXITSTATUS" => opts.exit_status,
+        "SEE ALSO" | "SEEALSO" => opts.see_also,
+        "EXAMPLES" => opts.examples,
+        "AUTHOR" | "AUTHORS" => opts.author,
+        _ => false,
+    }
+}
+
+pub fn view(json: &serde_json::Value, opts: &ViewOptions) -> String {
+    let mut out = String::new();
+
+    if let Some(t) = json.get("title").and_then(|v| v.as_str()) {
+        out.push_str("# ");
+        out.push_str(t);
+        if let Some(s) = json.get("section").and_then(|v| v.as_str()) {
+            out.push('(');
+            out.push_str(s);
+            out.push(')');
+        }
+        out.push_str("\n\n");
+    }
+
+    if let Some(name) = json.get("name").and_then(|v| v.as_str()) {
+        out.push_str("**");
+        out.push_str(name);
+        out.push_str("**");
+        if let Some(desc) = json.get("description").and_then(|v| v.as_str()) {
+            out.push_str(" - ");
+            out.push_str(desc);
+        }
+        out.push_str("\n\n");
+    }
+
+    let mut shown_sections = std::collections::HashSet::new();
+
+    if let Some(sections) = json.get("sections").and_then(|v| v.as_array()) {
+        for sec in sections {
+            if let Some(title) = sec.get("title").and_then(|v| v.as_str()) {
+                if section_match(title, opts) {
+                    shown_sections.insert(title.to_string());
+                    out.push_str("## ");
+                    out.push_str(title);
+                    out.push_str("\n\n");
+
+                    if let Some(text) = sec.get("text").and_then(|v| v.as_str()) {
+                        for para in text.split('\n') {
+                            let p = para.trim();
+                            if !p.is_empty() {
+                                out.push_str(p);
+                                out.push_str("\n\n");
+                            }
+                        }
+                    }
+
+                    if let Some(items) = sec.get("items").and_then(|v| v.as_array()) {
+                        for item in items {
+                            if let Some(s) = item.as_str() {
+                                let trimmed = s.trim();
+                                if !trimmed.is_empty() {
+                                    out.push_str("- ");
+                                    out.push_str(trimmed);
+                                    out.push('\n');
+                                }
+                            }
+                        }
+                        out.push('\n');
+                    }
+                }
+            }
+        }
+    }
+
+    if opts.outline || opts.outline_head.is_some() {
+        if let Some(sections) = json.get("sections").and_then(|v| v.as_array()) {
+            let head_lines = opts.outline_head.unwrap_or(0);
+            let show_heads = head_lines > 0;
+
+            if opts.outline && !show_heads {
+                out.push_str("## Outline\n\n");
+            }
+
+            for sec in sections {
+                if let Some(title) = sec.get("title").and_then(|v| v.as_str()) {
+                    if !shown_sections.contains(title) {
+                        out.push_str("### ");
+                        out.push_str(title);
+                        out.push_str("\n\n");
+
+                        if show_heads {
+                            if let Some(text) = sec.get("text").and_then(|v| v.as_str()) {
+                                let lines: Vec<&str> = text.lines().take(head_lines).collect();
+                                for line in lines {
+                                    let l = line.trim();
+                                    if !l.is_empty() {
+                                        out.push_str(l);
+                                        out.push_str("\n");
+                                    }
+                                }
+                                out.push('\n');
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    out.trim_end().to_string()
+}
