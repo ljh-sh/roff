@@ -7,6 +7,7 @@ BIN_NAME="roff"
 
 TARGETS=(
     "x86_64-pc-windows-gnu:win:x64"
+    "aarch64-pc-windows-gnullvm:win:arm64"
     "x86_64-apple-darwin:darwin:x64"
     "aarch64-apple-darwin:darwin:arm64"
     "x86_64-unknown-linux-musl:linux:x64"
@@ -86,6 +87,9 @@ case "${1:-all}" in
     win-x64|x86_64-pc-windows-gnu)
         build_target "x86_64-pc-windows-gnu" "win" "x64"
         ;;
+    win-arm64|aarch64-pc-windows-gnullvm)
+        build_target "aarch64-pc-windows-gnullvm" "win" "arm64"
+        ;;
     darwin-x64|x86_64-apple-darwin)
         build_target "x86_64-apple-darwin" "darwin" "x64"
         ;;
@@ -105,7 +109,7 @@ case "${1:-all}" in
         build_target "i686-unknown-freebsd" "freebsd" "i686"
         ;;
     *)
-        echo "Usage: $0 [all|win-x64|darwin-x64|darwin-arm64|linux-x64|linux-arm64|freebsd-x64|freebsd-i686]"
+        echo "Usage: $0 [all|win-x64|win-arm64|darwin-x64|darwin-arm64|linux-x64|linux-arm64|freebsd-x64|freebsd-i686]"
         exit 1
         ;;
 esac
