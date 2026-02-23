@@ -209,12 +209,25 @@ fn format_inline_macros(arg: &str) -> String {
 
 /// 根据 macro 名称格式化参数
 /// 将 roff macro 转换为 Markdown 格式
-/// 例如: .Fl a -> -a, .Ar file -> _file_, .Pq x -> (x)
+/// 例如: .Fl a -> -a, .Ar file -> file, .Pq x -> (x)
 fn format_macro(macro_name: &str, arg: &str) -> String {
     match macro_name {
         "Op" => format!("[{}]", format_nested_macros(arg)), // [可选参数]
-        "Ar" => format!("_{}_", format_nested_macros(arg)), // _参数_
-        "Fl" => format!("-{}", format_nested_macros(arg).trim_start_matches('-')), // -选项
+        "Ar" => {
+            if arg.is_empty() {
+                "file ...".to_string() // default for .Ar with no argument
+            } else {
+                format_nested_macros(arg) // 参数直接显示，不加装饰
+            }
+        } // 参数（不加装饰）
+        "Fl" => {
+            let processed = format_nested_macros(arg);
+            if processed.starts_with('-') {
+                processed // already has - prefix
+            } else {
+                format!("-{}", processed)
+            }
+        } // -选项
         "Pa" => format_nested_macros(arg),                  // 文件路径（保持原样）
         "Xr" => {
             // 交叉引用，如 ls(1)
@@ -248,7 +261,7 @@ fn format_macro(macro_name: &str, arg: &str) -> String {
 
 /// 处理嵌套的 inline macro
 /// 例如: .Pq Sq Pa \&. -> (. ')
-/// 先检查第一个词是否是 macro，如果是则递归处理
+/// 处理所有词作为 potential macro，递归处理每个 macro
 fn format_nested_macros(arg: &str) -> String {
     let trimmed = arg.trim();
     let words: Vec<&str> = trimmed.split_whitespace().collect();
@@ -256,13 +269,86 @@ fn format_nested_macros(arg: &str) -> String {
         return format_inline_macros(arg);
     }
 
-    let first = words[0];
-    if is_inline_macro(first) {
-        let rest = words[1..].join(" ");
-        format_macro(first, &rest)
-    } else {
-        format_inline_macros(arg)
+    let mut result = String::new();
+    let mut i = 0;
+    let mut suppress_space = false;
+
+    while i < words.len() {
+        let word = words[i];
+
+        if word == "Ns" {
+            suppress_space = true;
+            i += 1;
+            continue;
+        }
+
+        if word == "No" {
+            i += 1;
+            continue;
+        }
+
+        if is_inline_macro(word) {
+            // Collect remaining words for this macro
+            let mut j = i + 1;
+            let mut arg_end = j;
+            let mut depth = 0;
+
+            // Find where this macro's argument ends
+            // Simple heuristic: count words that belong to this macro
+            while j < words.len() {
+                let w = words[j];
+                if is_inline_macro(w) || w == "Ns" || w == "No" {
+                    break;
+                }
+                arg_end = j + 1;
+                j += 1;
+            }
+
+            let arg_words: Vec<&str> = words[i + 1..arg_end].iter().copied().collect();
+            let arg_str = arg_words.join(" ");
+
+            let formatted = format_macro(word, &arg_str);
+
+            // Add space before formatted macro if needed
+            if !result.is_empty() && !suppress_space {
+                let last_char = result.chars().last().unwrap_or(' ');
+                if last_char != ' '
+                    && last_char != '-'
+                    && last_char != '('
+                    && last_char != '['
+                    && last_char != '='
+                {
+                    result.push(' ');
+                }
+            }
+
+            if suppress_space && !result.is_empty() && result.ends_with(' ') {
+                result.pop(); // Remove trailing space
+            }
+            result.push_str(&formatted);
+            suppress_space = false;
+
+            i = arg_end;
+            continue;
+        } else {
+            if !result.is_empty() && !suppress_space {
+                let last_char = result.chars().last().unwrap_or(' ');
+                if last_char != ' '
+                    && last_char != '-'
+                    && last_char != '('
+                    && last_char != '['
+                    && last_char != '='
+                {
+                    result.push(' ');
+                }
+            }
+            result.push_str(word);
+            suppress_space = false;
+            i += 1;
+        }
     }
+
+    result
 }
 
 /// 检查是否是 inline macro（不需要换行的行内 macro）
