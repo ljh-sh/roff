@@ -50,4 +50,4 @@ let md = to_markdown(&roff);
 
 ## License
 
-MIT
+Apache-2.0
