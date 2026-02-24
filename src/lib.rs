@@ -388,27 +388,31 @@ pub fn parse_to_json(input: &str) -> Value {
     for raw in input.lines() {
         let line = raw.trim_end();
 
-        // 跳过注释行 .\" 开头的行
-        if line.starts_with(".\"") {
+        // 跳过注释行 .\" 开头的行 (dot, backslash, quote)
+        // In Rust: .\\" means dot + backslash + quote
+        if line.starts_with(".\\\"") {
             continue;
         }
 
         // .Dt TITLE SECTION - 文档标题和 section
         // .TH TITLE SECTION - BSD/macOS 风格，等同于 .Dt
         // 注意：某些文件（如 zshall）会在中间包含第二个 .TH，这时不应该重置文档
-        if (line.starts_with(".Dt ") || line.starts_with(".TH ")) && !found_header {
-            // 找到标题后，清除之前解析的所有内容（版权声明等）
-            doc = Doc::default();
-            current = Section::default();
-            have_section = false;
-            found_header = true;
+        if line.starts_with(".Dt ") || line.starts_with(".TH ") {
+            if !found_header {
+                // 找到标题后，清除之前解析的所有内容（版权声明等）
+                doc = Doc::default();
+                current = Section::default();
+                have_section = false;
+                found_header = true;
 
-            let rest = line[4..].trim();
-            let mut parts = rest.split_whitespace();
-            let t = parts.next().map(|s| trim_macro_arg(s));
-            let sec = parts.next().map(|s| trim_macro_arg(s));
-            doc.title = t;
-            doc.section = sec;
+                let rest = line[4..].trim();
+                let mut parts = rest.split_whitespace();
+                let t = parts.next().map(|s| trim_macro_arg(s));
+                let sec = parts.next().map(|s| trim_macro_arg(s));
+                doc.title = t;
+                doc.section = sec;
+            }
+            // Skip this line - either process first .TH or ignore subsequent .TH
             continue;
         }
 
@@ -545,11 +549,40 @@ pub fn parse_to_json(input: &str) -> Value {
             continue;
         }
 
+        // .TP - Tagged paragraph (hanging indent)
+        // The next line is the tag (bold), following lines are body
+        if line.starts_with(".TP")
+            || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "TP")
+        {
+            // Start a new item in the list for the tag
+            current.in_list = true;
+            current.items.push(String::new()); // Empty tag marker for TP
+            continue;
+        }
+
+        // .PD - Paragraph distance (set to 0 for compact lists)
+        // Just skip it for now, don't close lists automatically
+        if line.starts_with(".PD")
+            || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "PD")
+        {
+            current.in_list = false; // Close list after PD
+            continue;
+        }
+
         // 在列表内处理 macro 行（重要：添加到 items 而不是 text）
+        // 但跳过控制性 macro 如 .PD, .TP 等
         if current.in_list && line.starts_with('.') && line.len() > 2 {
-            let macro_part = &line[1..3];
+            // Skip control macros that shouldn't be added to list items
+            let macro_name = &line[1..3];
+            if matches!(
+                macro_name,
+                "PD" | "TP" | "Bl" | "El" | "It" | "PP" | "Sp" | "Rs" | "Re"
+            ) {
+                continue;
+            }
+
             let rest = if line.len() > 3 { line[3..].trim() } else { "" };
-            let formatted = format_macro(macro_part, rest);
+            let formatted = format_macro(macro_name, rest);
             if !formatted.is_empty() {
                 if let Some(last) = current.items.last_mut() {
                     if !last.is_empty() {
@@ -559,6 +592,11 @@ pub fn parse_to_json(input: &str) -> Value {
                 }
                 continue;
             }
+        }
+        // .so FILE - source (include another file)
+        // Skip for now - would require file resolution
+        if line.starts_with(".so ") {
+            continue;
         }
         if line.starts_with('.') && line.len() > 2 {
             let macro_part = &line[1..3];
