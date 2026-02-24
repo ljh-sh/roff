@@ -914,7 +914,10 @@ fn section_match(title: &str, opts: &ViewOptions) -> bool {
         "SEE ALSO" | "SEEALSO" => opts.see_also,
         "EXAMPLES" => opts.examples,
         "AUTHOR" | "AUTHORS" => opts.author,
-        _ => false,
+        _ => {
+            // For other sections, show them if --all is set
+            opts.all
+        }
     }
 }
 
