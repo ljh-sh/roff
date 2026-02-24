@@ -43,13 +43,14 @@ fn cmd_tojson_help() -> ! {
     eprintln!("       roff tojson -- < file.1");
     eprintln!("");
     eprintln!("Options:");
-    eprintln!("  --pretty    Pretty-print JSON output");
-    eprintln!("  -h, --help  Show this help message");
+    eprintln!("  --pretty         Pretty-print JSON output");
+    eprintln!("  --source-expand  Expand .so (source) includes");
+    eprintln!("  -h, --help       Show this help message");
     eprintln!("");
     eprintln!("Examples:");
     eprintln!("  roff tojson file.1");
     eprintln!("  roff tojson --pretty file.1");
-    eprintln!("  roff tojson --pretty file.1 file.2");
+    eprintln!("  roff tojson --source-expand file.1");
     eprintln!("  cat file.1 | roff tojson --");
     process::exit(0);
 }
@@ -57,15 +58,16 @@ fn cmd_tojson_help() -> ! {
 fn cmd_tomd_help() -> ! {
     eprintln!("roff-tomd - Convert man pages to Markdown");
     eprintln!("");
-    eprintln!("Usage: roff tomd <file>...");
+    eprintln!("Usage: roff tomd [options] <file>...");
     eprintln!("       roff tomd -- < file.1");
     eprintln!("");
     eprintln!("Options:");
-    eprintln!("  -h, --help  Show this help message");
+    eprintln!("  --source-expand  Expand .so (source) includes");
+    eprintln!("  -h, --help      Show this help message");
     eprintln!("");
     eprintln!("Examples:");
     eprintln!("  roff tomd file.1");
-    eprintln!("  roff tomd file.1 file.2");
+    eprintln!("  roff tomd --source-expand file.1");
     eprintln!("  cat file.1 | roff tomd --");
     process::exit(0);
 }
