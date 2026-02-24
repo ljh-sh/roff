@@ -395,7 +395,8 @@ pub fn parse_to_json(input: &str) -> Value {
 
         // .Dt TITLE SECTION - 文档标题和 section
         // .TH TITLE SECTION - BSD/macOS 风格，等同于 .Dt
-        if line.starts_with(".Dt ") || line.starts_with(".TH ") {
+        // 注意：某些文件（如 zshall）会在中间包含第二个 .TH，这时不应该重置文档
+        if (line.starts_with(".Dt ") || line.starts_with(".TH ")) && !found_header {
             // 找到标题后，清除之前解析的所有内容（版权声明等）
             doc = Doc::default();
             current = Section::default();
@@ -404,8 +405,8 @@ pub fn parse_to_json(input: &str) -> Value {
 
             let rest = line[4..].trim();
             let mut parts = rest.split_whitespace();
-            let t = parts.next().map(|s| s.to_string());
-            let sec = parts.next().map(|s| s.to_string());
+            let t = parts.next().map(|s| trim_macro_arg(s));
+            let sec = parts.next().map(|s| trim_macro_arg(s));
             doc.title = t;
             doc.section = sec;
             continue;
