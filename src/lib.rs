@@ -22,7 +22,41 @@ struct Doc {
     desc: Option<String>,    // 简短描述
     envs: Vec<String>,       // 环境变量列表
     xrefs: Vec<String>,      // 交叉引用列表 (Xr)
+    source: Vec<String>,     // .so 展开的文件列表
     sections: Vec<Section>,  // 所有章节的列表
+}
+
+/// 将 JSON Value 转换为 Section 结构体
+fn json_value_to_section(v: &serde_json::Value) -> Option<Section> {
+    let obj = v.as_object()?;
+    let title = obj.get("title")?.as_str()?.to_string();
+
+    // Skip sections with empty titles
+    if title.is_empty() {
+        return None;
+    }
+
+    let text = obj
+        .get("text")
+        .and_then(|t| t.as_str())
+        .unwrap_or("")
+        .to_string();
+    let items: Vec<String> = obj
+        .get("items")
+        .and_then(|i| i.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|s| s.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Some(Section {
+        title,
+        text,
+        items,
+        in_list: false,
+    })
 }
 
 /// 去除 macro 参数的首尾空白和双引号
@@ -378,7 +412,14 @@ fn is_inline_macro(name: &str) -> bool {
 
 /// 将 man 文档内容解析为 JSON Value
 /// 这是核心解析函数，逐行处理 roff macro
+/// source_expand: 是否展开 .so 包含的文件
 pub fn parse_to_json(input: &str) -> Value {
+    parse_to_json_with_opts(input, false, None)
+}
+
+/// 解析并可选展开 .so 文件
+/// base_path: 用于解析 .so 文件的相对路径
+pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Option<&str>) -> Value {
     let mut doc = Doc::default(); // 整个文档
     let mut current = Section::default(); // 当前正在处理的章节
     let mut have_section = bool::default(); // 是否已经有章节
@@ -457,12 +498,16 @@ pub fn parse_to_json(input: &str) -> Value {
         // .Sh TITLE - 开始新章节 (支持 .Sh 和 .SH)
         let line_upper = line.to_uppercase();
         if line.starts_with(".Sh ") || line_upper.starts_with(".SH ") {
-            if have_section {
+            // Only push current section if it has content
+            if have_section
+                && (!current.title.is_empty()
+                    || !current.text.is_empty()
+                    || !current.items.is_empty())
+            {
                 doc.sections.push(current);
                 current = Section::default();
-            } else {
-                have_section = true;
             }
+            have_section = true;
             current.title = trim_macro_arg(&line[4..]);
             continue;
         }
@@ -594,8 +639,54 @@ pub fn parse_to_json(input: &str) -> Value {
             }
         }
         // .so FILE - source (include another file)
-        // Skip for now - would require file resolution
         if line.starts_with(".so ") {
+            let filename = line[4..].trim();
+
+            // Always record the source file
+            doc.source.push(filename.to_string());
+
+            // If source_expand is enabled and we have a base path, try to expand
+            if source_expand {
+                // First, push the current section if it has content
+                if have_section
+                    || !current.title.is_empty()
+                    || !current.text.is_empty()
+                    || !current.items.is_empty()
+                {
+                    doc.sections.push(current);
+                    current = Section::default();
+                    have_section = true;
+                }
+
+                if let Some(base) = base_path {
+                    // Try to resolve the included file relative to base_path
+                    let base_dir = std::path::Path::new(base)
+                        .parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| std::path::Path::new(".").to_path_buf());
+                    let included_path = base_dir.join(filename);
+
+                    if let Ok(included_content) = std::fs::read_to_string(&included_path) {
+                        // Parse the included content
+                        let included_json = parse_to_json_with_opts(
+                            &included_content,
+                            true,
+                            included_path.to_str(),
+                        );
+
+                        // Merge sections from included file into current document
+                        if let Some(included_sections) =
+                            included_json.get("sections").and_then(|v| v.as_array())
+                        {
+                            for sec_val in included_sections {
+                                if let Some(sec) = json_value_to_section(sec_val) {
+                                    doc.sections.push(sec);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             continue;
         }
         if line.starts_with('.') && line.len() > 2 {
@@ -686,6 +777,10 @@ pub fn parse_to_json(input: &str) -> Value {
     if !doc.xrefs.is_empty() {
         let arr = doc.xrefs.into_iter().map(Value::String).collect();
         root.insert("xrefs".to_string(), Value::Array(arr));
+    }
+    if !doc.source.is_empty() {
+        let arr = doc.source.into_iter().map(Value::String).collect();
+        root.insert("source".to_string(), Value::Array(arr));
     }
     root.insert("sections".to_string(), Value::Array(sections_json));
     Value::Object(root)
@@ -833,6 +928,7 @@ pub struct ViewOptions {
     pub outline_head: Option<usize>,
     pub meta: bool,
     pub all: bool,
+    pub source_expand: bool, // 展开 .so 包含的文件
 }
 
 impl ViewOptions {
@@ -859,6 +955,7 @@ impl ViewOptions {
                 }
                 "--meta" => opts.meta = true,
                 "--all" => opts.all = true,
+                "--source-expand" => opts.source_expand = true,
                 _ => {}
             }
         }

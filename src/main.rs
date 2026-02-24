@@ -324,7 +324,7 @@ fn main() {
 
         if use_stdin || queries.is_empty() {
             let content = read_all_from_stdin().expect("failed to read stdin");
-            let json = roff::parse_to_json(&content);
+            let json = roff::parse_to_json_with_opts(&content, opts.source_expand, None);
             println!("{}", roff::view(&json, &opts));
             return;
         }
@@ -332,7 +332,8 @@ fn main() {
         for query in queries {
             if query.contains('/') || query.contains('.') {
                 let content = roff::read_to_string_lossy(&query).expect("failed to read file");
-                let json = roff::parse_to_json(&content);
+                let json =
+                    roff::parse_to_json_with_opts(&content, opts.source_expand, Some(&query));
                 println!("{}", roff::view(&json, &opts));
                 continue;
             }
@@ -369,7 +370,8 @@ fn main() {
             }
 
             let content = roff::read_to_string_lossy(&found_file).expect("failed to read file");
-            let json = roff::parse_to_json(&content);
+            let json =
+                roff::parse_to_json_with_opts(&content, opts.source_expand, Some(&found_file));
             println!("{}", roff::view(&json, &opts));
         }
         return;
@@ -378,6 +380,7 @@ fn main() {
     let mut pretty = false;
     let mut files = Vec::new();
     let mut use_stdin = false;
+    let mut source_expand = false;
     let mut i = 1;
     while i < args.len() {
         if args[i] == "-h" || args[i] == "--help" {
@@ -388,6 +391,8 @@ fn main() {
             }
         } else if args[i] == "--pretty" {
             pretty = true;
+        } else if args[i] == "--source-expand" {
+            source_expand = true;
         } else if args[i] == "--" {
             use_stdin = true;
         } else if args[i].starts_with('-') {
@@ -420,7 +425,17 @@ fn main() {
     for (name, content) in inputs {
         match cmd.as_str() {
             "tojson" => {
-                let out = roff::parse_to_string(&content, pretty);
+                let base_path = if name != "stdin" {
+                    Some(name.as_str())
+                } else {
+                    None
+                };
+                let json = roff::parse_to_json_with_opts(&content, source_expand, base_path);
+                let out = if pretty {
+                    serde_json::to_string_pretty(&json).unwrap()
+                } else {
+                    serde_json::to_string(&json).unwrap()
+                };
                 if num_inputs > 1 {
                     outputs.push(format!("# File: {}\n{}", name, out));
                 } else {
@@ -428,7 +443,12 @@ fn main() {
                 }
             }
             "tomd" => {
-                let json = roff::parse_to_json(&content);
+                let base_path = if name != "stdin" {
+                    Some(name.as_str())
+                } else {
+                    None
+                };
+                let json = roff::parse_to_json_with_opts(&content, source_expand, base_path);
                 let out = roff::to_markdown(&json);
                 if num_inputs > 1 {
                     outputs.push(format!("# File: {}\n{}", name, out));
