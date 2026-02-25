@@ -586,10 +586,55 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
             }
             continue;
         }
+
+        // .IP - indented paragraph (like .It but for .IP "tag")
+        // Creates a new list item with the tag
+        if line.starts_with(".IP")
+            || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "IP")
+        {
+            // Push previous item if exists
+            if current.in_list && !current.items.is_empty() {
+                // Keep current item, just add new content
+            }
+            current.in_list = true;
+
+            let arg = line.get(3..).unwrap_or("").trim();
+            if !arg.is_empty() {
+                let formatted = format_nested_macros(arg);
+                current.items.push(formatted);
+            } else {
+                current.items.push(String::new());
+            }
+            continue;
+        }
         // .Pp - 段落分隔
         if line.starts_with(".Pp") {
             if !current.text.is_empty() && !current.text.ends_with('\n') {
                 current.text.push_str("\n\n");
+            }
+            continue;
+        }
+
+        // .P - new paragraph (same as .Pp)
+        if line.starts_with(".P ") || line == ".P" {
+            if !current.text.is_empty() && !current.text.ends_with('\n') {
+                current.text.push_str("\n\n");
+            }
+            continue;
+        }
+
+        // .sp - vertical space
+        if line.starts_with(".sp") {
+            if !current.text.is_empty() && !current.text.ends_with('\n') {
+                current.text.push_str("\n\n");
+            }
+            continue;
+        }
+
+        // .br - line break (within paragraph)
+        if line.starts_with(".br") {
+            if !current.text.is_empty() && !current.text.ends_with('\n') {
+                current.text.push(' ');
             }
             continue;
         }
@@ -621,7 +666,19 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
             let macro_name = &line[1..3];
             if matches!(
                 macro_name,
-                "PD" | "TP" | "Bl" | "El" | "It" | "PP" | "Sp" | "Rs" | "Re"
+                "PD" | "TP"
+                    | "Bl"
+                    | "El"
+                    | "It"
+                    | "PP"
+                    | "Sp"
+                    | "Rs"
+                    | "Re"
+                    | "IP"
+                    | "P"
+                    | "br"
+                    | "nf"
+                    | "fi"
             ) {
                 continue;
             }
