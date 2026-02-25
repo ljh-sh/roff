@@ -74,9 +74,17 @@ pub fn read_to_string_lossy<P: AsRef<Path>>(path: P) -> std::io::Result<String> 
 /// 将文本推送到当前 section 的 text 字段
 /// 如果 text 非空，会先添加一个空格再追加内容
 /// 会对文本进行转义序列处理
+/// 保留段落结构，用换行分隔
 fn push_text(sec: &mut Section, line: &str) {
     if !sec.text.is_empty() {
-        sec.text.push(' ');
+        // 如果上一个字符是换行，说明是新段落的开始
+        // 否则用空格连接（同一段落内）
+        let ends_with_newline = sec.text.ends_with('\n');
+
+        if !ends_with_newline {
+            sec.text.push(' '); // 同一段落内用空格连接
+        }
+        // 如果以\n\n结尾，说明刚才是段落分隔，不需要额外处理
     }
     sec.text.push_str(&format_inline_macros(line));
 }
@@ -807,6 +815,11 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
                 let trimmed = line.trim();
                 let formatted = format_inline_macros(trimmed);
                 current.items.push(formatted);
+            }
+        } else if line.trim().is_empty() {
+            // Blank line = paragraph break
+            if !current.text.is_empty() && !current.text.ends_with('\n') {
+                current.text.push_str("\n\n");
             }
         } else {
             if !line.trim().is_empty() {
