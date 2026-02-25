@@ -684,11 +684,11 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
         }
 
         // .PD - Paragraph distance (set to 0 for compact lists)
-        // Just skip it for now, don't close lists automatically
+        // Don't close the list - just skip it, list continues
         if line.starts_with(".PD")
             || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "PD")
         {
-            current.in_list = false; // Close list after PD
+            // Just skip, don't close the list
             continue;
         }
 
