@@ -639,6 +639,31 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
             continue;
         }
 
+        // .nf - no-fill mode (preserve line breaks)
+        if line.starts_with(".nf") {
+            // Start a new line in no-fill mode - just add newline
+            if !current.text.is_empty() && !current.text.ends_with('\n') {
+                current.text.push('\n');
+            }
+            continue;
+        }
+
+        // .fi - fill mode (wrap text)
+        if line.starts_with(".fi") {
+            // Just continue, we're already handling text wrapping
+            continue;
+        }
+
+        // .RS - relative start (indent)
+        if line.starts_with(".RS") || line.starts_with(".rs") {
+            continue;
+        }
+
+        // .RE - relative end (outdent)
+        if line.starts_with(".RE") || line.starts_with(".re") {
+            continue;
+        }
+
         // .TP - Tagged paragraph (hanging indent)
         // The next line is the tag (bold), following lines are body
         if line.starts_with(".TP")
