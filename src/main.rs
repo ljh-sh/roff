@@ -5,6 +5,8 @@ use std::path::Path;
 use std::process::{self, Command};
 use std::time::Instant;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn read_all_from_stdin() -> io::Result<String> {
     let mut buf = String::new();
     let mut stdin = io::stdin();
@@ -14,39 +16,43 @@ fn read_all_from_stdin() -> io::Result<String> {
 
 fn usage() -> ! {
     eprintln!("roff - Skillful man page to JSON/Markdown converter");
-    eprintln!("");
-    eprintln!("Usage: roff <command> [options] [arguments]");
-    eprintln!("");
+    eprintln!();
+    eprintln!("Usage: roff [options] <command> [options] [arguments]");
+    eprintln!();
+    eprintln!("Options:");
+    eprintln!("  -h, --help       Show this help message");
+    eprintln!("  -V, --version    Show version");
+    eprintln!();
     eprintln!("Commands:");
     eprintln!("  tojson          Convert man file(s) to JSON");
     eprintln!("  tomd            Convert man file(s) to Markdown");
     eprintln!("  view            Progressive disclosure view");
     eprintln!("  bench           Benchmark parser performance");
-    eprintln!("");
+    eprintln!();
     eprintln!("Examples:");
     eprintln!("  roff tojson file.1           # Convert to JSON");
     eprintln!("  roff tomd file.1             # Convert to Markdown");
     eprintln!("  roff view --synopsis file.1  # View synopsis only");
     eprintln!("  roff bench --all              # Benchmark all man files");
     eprintln!("  roff tojson -- < file.1      # Read from stdin");
-    eprintln!("");
+    eprintln!();
     eprintln!("Run 'roff <command> --help' for more details on a command.");
-    eprintln!("");
+    eprintln!();
     eprintln!("For full documentation, see: https://github.com/ljh-sh/roff");
     process::exit(1);
 }
 
 fn cmd_tojson_help() -> ! {
     eprintln!("roff-tojson - Convert man pages to JSON");
-    eprintln!("");
+    eprintln!();
     eprintln!("Usage: roff tojson [options] <file>...");
     eprintln!("       roff tojson -- < file.1");
-    eprintln!("");
+    eprintln!();
     eprintln!("Options:");
     eprintln!("  --pretty         Pretty-print JSON output");
     eprintln!("  --source-expand  Expand .so (source) includes");
     eprintln!("  -h, --help       Show this help message");
-    eprintln!("");
+    eprintln!();
     eprintln!("Examples:");
     eprintln!("  roff tojson file.1");
     eprintln!("  roff tojson --pretty file.1");
@@ -57,14 +63,14 @@ fn cmd_tojson_help() -> ! {
 
 fn cmd_tomd_help() -> ! {
     eprintln!("roff-tomd - Convert man pages to Markdown");
-    eprintln!("");
+    eprintln!();
     eprintln!("Usage: roff tomd [options] <file>...");
     eprintln!("       roff tomd -- < file.1");
-    eprintln!("");
+    eprintln!();
     eprintln!("Options:");
     eprintln!("  --source-expand  Expand .so (source) includes");
     eprintln!("  -h, --help      Show this help message");
-    eprintln!("");
+    eprintln!();
     eprintln!("Examples:");
     eprintln!("  roff tomd file.1");
     eprintln!("  roff tomd --source-expand file.1");
@@ -74,18 +80,18 @@ fn cmd_tomd_help() -> ! {
 
 fn cmd_view_help() -> ! {
     eprintln!("roff-view - Progressive disclosure view for man pages");
-    eprintln!("");
+    eprintln!();
     eprintln!("Usage: roff view [options] <query>...");
     eprintln!("       roff view [options] <file>...");
     eprintln!("       roff view [options] -            # read from stdin");
-    eprintln!("");
+    eprintln!();
     eprintln!("Query formats:");
     eprintln!("  roff view ls                   # Search 'ls' in manpath");
     eprintln!("  roff view ls 1                 # Search 'ls' in section 1");
     eprintln!("  roff view git ls                # Search multiple in manpath");
     eprintln!("  roff view /path/to/file.1      # Direct file path");
     eprintln!("  cat file.1 | roff view -        # Read from stdin");
-    eprintln!("");
+    eprintln!();
     eprintln!("Options:");
     eprintln!("  --description      Show NAME + description");
     eprintln!("  --synopsis         Show SYNOPSIS section");
@@ -101,7 +107,7 @@ fn cmd_view_help() -> ! {
     eprintln!("  --meta             Shortcut: --description --synopsis --see-also --outline");
     eprintln!("  --all              Show all sections");
     eprintln!("  -h, --help         Show this help message");
-    eprintln!("");
+    eprintln!();
     eprintln!("Examples:");
     eprintln!("  roff view ls                       # Search 'ls' in manpath");
     eprintln!("  roff view ls 1                     # Search 'ls' in section 1");
@@ -117,14 +123,14 @@ fn cmd_view_help() -> ! {
 
 fn cmd_bench_help() -> ! {
     eprintln!("roff-bench - Benchmark parser performance on man files");
-    eprintln!("");
+    eprintln!();
     eprintln!("Usage: roff bench [options]");
-    eprintln!("");
+    eprintln!();
     eprintln!("Options:");
     eprintln!("  --count N    Process first N files (default: 10)");
     eprintln!("  --all       Process all files in manpath");
     eprintln!("  -h, --help  Show this help message");
-    eprintln!("");
+    eprintln!();
     eprintln!("Examples:");
     eprintln!("  roff bench                 # Benchmark first 10 files");
     eprintln!("  roff bench --count 100     # Benchmark first 100 files");
@@ -219,7 +225,7 @@ fn cmd_bench(all: bool, count: usize) {
     let ms = elapsed.as_millis();
     let secs = elapsed.as_secs_f64();
 
-    eprintln!("");
+    eprintln!();
     eprintln!("=== Benchmark Results ===");
     eprintln!("Files processed: {}", success);
     eprintln!("Files failed:    {}", failed);
@@ -230,7 +236,7 @@ fn cmd_bench(all: bool, count: usize) {
     }
 
     if !errors.is_empty() {
-        eprintln!("");
+        eprintln!();
         eprintln!("Errors (first 5):");
         for (file, err) in errors.iter().take(5) {
             eprintln!("  {}: {}", file, err);
@@ -248,6 +254,11 @@ fn main() {
 
     if cmd == "-h" || cmd == "--help" {
         usage();
+    }
+
+    if cmd == "--version" || cmd == "-V" {
+        println!("roff {}", VERSION);
+        return;
     }
 
     if cmd == "help" {
@@ -406,10 +417,7 @@ fn main() {
         i += 1;
     }
 
-    let inputs: Vec<(String, String)> = if use_stdin {
-        let content = read_all_from_stdin().expect("failed to read stdin");
-        vec![("stdin".to_string(), content)]
-    } else if files.is_empty() {
+    let inputs: Vec<(String, String)> = if use_stdin || files.is_empty() {
         let content = read_all_from_stdin().expect("failed to read stdin");
         vec![("stdin".to_string(), content)]
     } else {
