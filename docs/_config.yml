@@ -1,5 +1,5 @@
 title: roff
-description: Skillful man page to JSON/Markdown converter
+description: Convert Unix man pages (roff/mdoc) to structured JSON or readable Markdown for docs pipelines and LLM context.
 baseurl: "/roff"
 url: "https://ljh-sh.github.io"
 
@@ -12,6 +12,7 @@ kramdown:
 
 plugins:
   - jekyll-relative-links
+  - jekyll-sitemap
 
 relative_links:
   enabled: true
