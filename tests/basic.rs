@@ -1,4 +1,4 @@
-use man_parser::parse_to_json;
+use roff::parse_to_json;
 
 const SAMPLE: &str = r#"
 .Dd August 31, 2020
@@ -37,4 +37,3 @@ fn parse_sample() {
     let items = opts.get("items").unwrap().as_array().unwrap();
     assert_eq!(items.len(), 2);
 }
-

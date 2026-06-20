@@ -1,12 +1,18 @@
 [package]
 name = "roff-cli"
 version = "0.1.0"
+authors = ["ljh-sh <lijunhao@x-cmd.com>"]
 edition = "2021"
+rust-version = "1.74"
 description = "Skillful man page to JSON/Markdown converter - human readable, AI-friendly"
+readme = "README.md"
+homepage = "https://github.com/ljh-sh/roff"
+documentation = "https://docs.rs/roff-cli"
 license = "Apache-2.0"
 repository = "https://github.com/ljh-sh/roff"
-keywords = ["man", "roff", "parser", "markdown", "cli"]
-categories = ["text-processing", "development-tools"]
+keywords = ["man", "roff", "parser", "markdown", "cli", "json"]
+categories = ["text-processing", "development-tools", "command-line-utilities"]
+exclude = [".release-artifacts/", ".github/", "target/", "*.swp", "*.swo", "*~", ".DS_Store"]
 
 [lib]
 name = "roff"

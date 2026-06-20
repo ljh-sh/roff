@@ -1,65 +1,183 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ['v*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name (e.g. v0.1.0)'
+        required: true
+        default: v0.1.0-test
+
+permissions: read-all
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  SOURCE_DATE_EPOCH: 1700000000
+  TZ: UTC
+  LC_ALL: C
+
 
 jobs:
   build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
+      fail-fast: false
       matrix:
-        config:
-          - {target: x86_64-unknown-linux-musl, os: ubuntu-latest, ext: ""}
-          - {target: aarch64-unknown-linux-musl, os: ubuntu-latest, ext: ""}
-          - {target: x86_64-pc-windows-gnu, os: windows-latest, ext: ".exe"}
-          - {target: aarch64-apple-darwin, os: macos-latest, ext: ""}
-          - {target: x86_64-apple-darwin, os: macos-latest, ext: ""}
-
-    name: ${{ matrix.config.target }}
-    runs-on: ${{ matrix.config.os }}
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            cross: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            cross: true
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            cross: true
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            cross: true
+          - target: x86_64-pc-windows-gnu
+            os: ubuntu-latest
+            cross: true
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            cross: false
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            cross: false
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@4d1965c9142484e48d40c19de54b5cba84953a06 # v1.10.0
         with:
           toolchain: stable
-          target: ${{ matrix.config.target }}
+          target: ${{ matrix.target }}
 
       - name: Install cross
-        if: matrix.config.os == 'ubuntu-latest'
-        run: cargo install cross
+        if: matrix.cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Build
         run: |
-          if [ "${{ matrix.config.os }}" = "ubuntu-latest" ]; then
-            cross build --release --target ${{ matrix.config.target }}
+          SYSROOT="$(rustc --print sysroot)"
+          export RUSTFLAGS="--remap-path-prefix=${{ github.workspace }}=. --remap-path-prefix=$SYSROOT=/rust --remap-path-prefix=$HOME/.cargo=/cargo"
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }}
           else
-            cargo build --release --target ${{ matrix.config.target }}
+            cargo build --release --target ${{ matrix.target }}
           fi
 
-      - name: Prepare artifact
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
         run: |
-          mkdir -p dist/${{ matrix.config.target }}/bin
-          cp target/${{ matrix.config.target }}/release/roff${{ matrix.config.ext }} dist/${{ matrix.config.target }}/bin/
+          mkdir -p dist/bin
+          cp target/${{ matrix.target }}/release/roff dist/bin/
+          strip dist/bin/roff 2>/dev/null || true
+          find dist -exec touch -m -t 202311140000.00 {} +
+          tar -cJf dist/roff-${{ matrix.target }}.tar.xz -C dist bin
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/bin | Out-Null
+          Copy-Item target/${{ matrix.target }}/release/roff.exe dist/bin/roff.exe
+          tar -cJf dist/roff-${{ matrix.target }}.tar.xz -C dist bin
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: roff-${{ matrix.config.target }}
-          path: dist/${{ matrix.config.target }}
+          name: roff-${{ matrix.target }}
+          path: dist/roff-${{ matrix.target }}.tar.xz
 
-      - name: Upload to release
-        if: github.event_name == 'release'
-        uses: svenstaro/upload-release-action@v2
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+
+      - name: Determine tag
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "name=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref }}
-          overwrite: true
-          file: dist/${{ matrix.config.target }}/*
+          path: artifacts
+          pattern: roff-*
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la artifacts
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd artifacts
+          sha256sum *.tar.xz > SHA256SUMS
+          cd ..
+          cat artifacts/SHA256SUMS
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da # v3.7.0
+
+      - name: Sign release artifacts
+        run: |
+          for f in artifacts/*.tar.xz artifacts/SHA256SUMS; do
+            [ -f "$f" ] || continue
+            cosign sign-blob --yes --bundle="${f}.sigstore.json" "$f"
+          done
+
+      - name: Create Release
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: ${{ steps.tag.outputs.name }}
+          generate_release_notes: true
+          files: |
+            artifacts/*.tar.xz
+            artifacts/SHA256SUMS
+            artifacts/*.sigstore.json
+
+  publish-crates:
+    name: Publish to crates.io
+    needs: release
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@4d1965c9142484e48d40c19de54b5cba84953a06 # v1.10.0
+        with:
+          toolchain: stable
+
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish

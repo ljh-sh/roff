@@ -273,7 +273,7 @@ fn format_macro(macro_name: &str, arg: &str) -> String {
         "Pa" => format_nested_macros(arg),                  // 文件路径（保持原样）
         "Xr" => {
             // 交叉引用，如 ls(1)
-            let parts: Vec<&str> = arg.trim().split_whitespace().collect();
+            let parts: Vec<&str> = arg.split_whitespace().collect();
             if parts.len() >= 2 {
                 format!("**{}**({})", parts[0], parts[1])
             } else if !parts.is_empty() {
@@ -333,7 +333,7 @@ fn format_nested_macros(arg: &str) -> String {
             // Collect remaining words for this macro
             let mut j = i + 1;
             let mut arg_end = j;
-            let mut depth = 0;
+            let _depth = 0;
 
             // Find where this macro's argument ends
             // Simple heuristic: count words that belong to this macro
@@ -346,7 +346,7 @@ fn format_nested_macros(arg: &str) -> String {
                 j += 1;
             }
 
-            let arg_words: Vec<&str> = words[i + 1..arg_end].iter().copied().collect();
+            let arg_words: Vec<&str> = words[i + 1..arg_end].to_vec();
             let arg_str = arg_words.join(" ");
 
             let formatted = format_macro(word, &arg_str);
@@ -456,8 +456,8 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
 
                 let rest = line[4..].trim();
                 let mut parts = rest.split_whitespace();
-                let t = parts.next().map(|s| trim_macro_arg(s));
-                let sec = parts.next().map(|s| trim_macro_arg(s));
+                let t = parts.next().map(trim_macro_arg);
+                let sec = parts.next().map(trim_macro_arg);
                 doc.title = t;
                 doc.section = sec;
             }
@@ -471,8 +471,8 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
         }
 
         // .Dd DATE - 文档日期
-        if line.starts_with(".Dd ") {
-            doc.date = Some(trim_macro_arg(&line[4..]));
+        if let Some(rest) = line.strip_prefix(".Dd ") {
+            doc.date = Some(trim_macro_arg(rest));
             continue;
         }
 
@@ -535,14 +535,14 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
         }
 
         // .Nd DESCRIPTION - 简短描述
-        if line.starts_with(".Nd ") {
-            doc.desc = Some(trim_macro_arg(&line[4..]));
+        if let Some(rest) = line.strip_prefix(".Nd ") {
+            doc.desc = Some(trim_macro_arg(rest));
             continue;
         }
 
         // .Ev ENV_VAR - 环境变量（收集到列表中）
-        if line.starts_with(".Ev ") {
-            let env = trim_macro_arg(&line[4..]);
+        if let Some(rest) = line.strip_prefix(".Ev ") {
+            let env = trim_macro_arg(rest);
             if !env.is_empty() && !doc.envs.contains(&env) {
                 doc.envs.push(env);
             }
@@ -550,8 +550,8 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
         }
 
         // .Xr NAME SECTION - 交叉引用（收集到列表中）
-        if line.starts_with(".Xr ") {
-            let mut xref = trim_macro_arg(&line[4..]);
+        if let Some(rest) = line.strip_prefix(".Xr ") {
+            let mut xref = trim_macro_arg(rest);
             xref = xref.trim_end_matches(',').trim().to_string();
             if !xref.is_empty() && !doc.xrefs.contains(&xref) {
                 doc.xrefs.push(xref);
@@ -587,10 +587,8 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
                 } else {
                     current.items.push(String::new());
                 }
-            } else {
-                if !arg.is_empty() {
-                    push_text(&mut current, arg.trim());
-                }
+            } else if !arg.is_empty() {
+                push_text(&mut current, arg.trim());
             }
             continue;
         }
@@ -729,8 +727,8 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
             }
         }
         // .so FILE - source (include another file)
-        if line.starts_with(".so ") {
-            let filename = line[4..].trim();
+        if let Some(rest) = line.strip_prefix(".so ") {
+            let filename = rest.trim();
 
             // Always record the source file
             doc.source.push(filename.to_string());
@@ -821,10 +819,8 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
             if !current.text.is_empty() && !current.text.ends_with('\n') {
                 current.text.push_str("\n\n");
             }
-        } else {
-            if !line.trim().is_empty() {
-                push_text(&mut current, line.trim());
-            }
+        } else if !line.trim().is_empty() {
+            push_text(&mut current, line.trim());
         }
     }
     if have_section {
@@ -1200,7 +1196,7 @@ pub fn view(json: &serde_json::Value, opts: &ViewOptions) -> String {
                                     let l = line.trim();
                                     if !l.is_empty() {
                                         out.push_str(l);
-                                        out.push_str("\n");
+                                        out.push('\n');
                                     }
                                 }
                                 out.push('\n');
