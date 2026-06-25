@@ -80,8 +80,14 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir -p dist/bin
-          cp target/${{ matrix.target }}/release/roff dist/bin/
-          strip dist/bin/roff 2>/dev/null || true
+          # Windows targets produce .exe; others don't
+          if [ -f target/${{ matrix.target }}/release/roff.exe ]; then
+            cp target/${{ matrix.target }}/release/roff.exe dist/bin/
+            strip dist/bin/roff.exe 2>/dev/null || true
+          else
+            cp target/${{ matrix.target }}/release/roff dist/bin/
+            strip dist/bin/roff 2>/dev/null || true
+          fi
           find dist -exec touch -m -t 202311140000.00 {} +
           tar -cJf dist/roff-${{ matrix.target }}.tar.xz -C dist bin
 
