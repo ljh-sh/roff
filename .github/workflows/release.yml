@@ -59,7 +59,7 @@ jobs:
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@4d1965c9142484e48d40c19de54b5cba84953a06 # v1.10.0
         with:
-          toolchain: stable
+          # toolchain channel is pinned in rust-toolchain.toml for reproducible builds (#24)
           target: ${{ matrix.target }}
 
       - name: Install cargo-zigbuild
@@ -71,9 +71,9 @@ jobs:
           SYSROOT="$(rustc --print sysroot)"
           export RUSTFLAGS="--remap-path-prefix=${{ github.workspace }}=. --remap-path-prefix=$SYSROOT=/rust --remap-path-prefix=$HOME/.cargo=/cargo"
           if [ "${{ matrix.cross }}" = "true" ]; then
-            cargo zigbuild --release --target ${{ matrix.target }}
+            cargo zigbuild --release --locked --target ${{ matrix.target }}
           else
-            cargo build --release --target ${{ matrix.target }}
+            cargo build --release --locked --target ${{ matrix.target }}
           fi
 
       - name: Package (Unix)
@@ -180,10 +180,9 @@ jobs:
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@4d1965c9142484e48d40c19de54b5cba84953a06 # v1.10.0
-        with:
-          toolchain: stable
+        # toolchain channel is pinned in rust-toolchain.toml for reproducible builds (#24)
 
       - name: Publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish
+        run: cargo publish --locked
