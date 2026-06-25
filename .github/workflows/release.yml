@@ -62,16 +62,16 @@ jobs:
           toolchain: stable
           target: ${{ matrix.target }}
 
-      - name: Install cross
+      - name: Install cargo-zigbuild
         if: matrix.cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        run: pip install cargo-zigbuild
 
       - name: Build
         run: |
           SYSROOT="$(rustc --print sysroot)"
           export RUSTFLAGS="--remap-path-prefix=${{ github.workspace }}=. --remap-path-prefix=$SYSROOT=/rust --remap-path-prefix=$HOME/.cargo=/cargo"
           if [ "${{ matrix.cross }}" = "true" ]; then
-            cross build --release --target ${{ matrix.target }}
+            cargo zigbuild --release --target ${{ matrix.target }}
           else
             cargo build --release --target ${{ matrix.target }}
           fi
