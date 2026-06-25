@@ -2,14 +2,24 @@
 use serde_json::{Map, Value};
 use std::path::Path;
 
+/// 章节内的一个列表项。
+/// - `tag`  : 标签（如 `-a`、`--fast`），来自 `.It`/`.IP`/`.TP` 的参数
+/// - `body` : 标签后的说明文字（多行累积）
+/// - `depth`: 列表嵌套深度（0 = 顶层列表项；嵌套 `.Bl` 内的项 depth ≥ 1）
+#[derive(Default, Clone)]
+struct ListItem {
+    tag: String,
+    body: String,
+    depth: usize,
+}
+
 /// 表示 man 文档中的一个 section（章节）
 /// 例如：NAME, SYNOPSIS, DESCRIPTION 等
 #[derive(Default)]
 struct Section {
-    title: String,      // 章节标题，如 "NAME", "DESCRIPTION"
-    text: String,       // 章节内的普通文本内容
-    items: Vec<String>, // 章节内的列表项（如 OPTIONS 下的 -a, -l 等）
-    in_list: bool,      // 标记当前是否在列表中（.Bl/.El 之间）
+    title: String,        // 章节标题，如 "NAME", "DESCRIPTION"
+    text: String,         // 章节内的普通文本内容
+    items: Vec<ListItem>, // 章节内的列表项（.Bl/.It 树，扁平 preorder + depth）
 }
 
 /// 表示整个 man 文档的结构
@@ -41,22 +51,30 @@ fn json_value_to_section(v: &serde_json::Value) -> Option<Section> {
         .and_then(|t| t.as_str())
         .unwrap_or("")
         .to_string();
-    let items: Vec<String> = obj
+    let items: Vec<ListItem> = obj
         .get("items")
         .and_then(|i| i.as_array())
         .map(|arr| {
             arr.iter()
-                .filter_map(|s| s.as_str().map(|s| s.to_string()))
+                .filter_map(|v| v.as_object())
+                .map(|o| ListItem {
+                    tag: o
+                        .get("tag")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    body: o
+                        .get("body")
+                        .and_then(|b| b.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    depth: o.get("depth").and_then(|d| d.as_u64()).unwrap_or(0) as usize,
+                })
                 .collect()
         })
         .unwrap_or_default();
 
-    Some(Section {
-        title,
-        text,
-        items,
-        in_list: false,
-    })
+    Some(Section { title, text, items })
 }
 
 /// 去除 macro 参数的首尾空白和双引号
@@ -433,6 +451,12 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
     let mut have_section = bool::default(); // 是否已经有章节
     let mut found_header = false; // 是否已经找到文档标题 (.Dt/.TH)
 
+    // 列表嵌套状态：list_stack 是「进入每层 .Bl 时保存的父 item index」栈，
+    // cur_item 是当前正在填充 body 的 item 在 current.items 中的 index。
+    // in_list ⇔ !list_stack.is_empty()；item 的 depth = list_stack.len() - 1。
+    let mut list_stack: Vec<Option<usize>> = Vec::new();
+    let mut cur_item: Option<usize> = None;
+
     // 逐行解析输入
     for raw in input.lines() {
         let line = raw.trim_end();
@@ -451,6 +475,8 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
                 // 找到标题后，清除之前解析的所有内容（版权声明等）
                 doc = Doc::default();
                 current = Section::default();
+                list_stack.clear();
+                cur_item = None;
                 have_section = false;
                 found_header = true;
 
@@ -514,6 +540,8 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
             {
                 doc.sections.push(current);
                 current = Section::default();
+                list_stack.clear();
+                cur_item = None;
             }
             have_section = true;
             current.title = trim_macro_arg(&line[4..]);
@@ -559,34 +587,41 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
             continue;
         }
 
-        // .Bl - 开始列表（tagged list, enum 等）
+        // .Bl - 开始列表（tagged list, enum 等）；支持嵌套：压栈保存父 item
         if line.starts_with(".Bl")
             || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "Bl")
         {
-            current.in_list = true;
+            list_stack.push(cur_item);
             continue;
         }
 
-        // .El - 结束列表
+        // .El - 结束列表；出栈恢复父 item（内层 .El 不再误关外层列表）
         if line.starts_with(".El")
             || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "El")
         {
-            current.in_list = false;
+            if let Some(parent) = list_stack.pop() {
+                cur_item = parent;
+            }
             continue;
         }
 
-        // .It - 列表项
+        // .It - 列表项（tag = 参数，body 后续累积）
         if line.starts_with(".It")
             || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "It")
         {
             let arg = line.get(3..).unwrap_or("").trim();
-            if current.in_list {
-                if !arg.is_empty() {
-                    let formatted = format_nested_macros(arg);
-                    current.items.push(formatted);
-                } else {
-                    current.items.push(String::new());
-                }
+            if !list_stack.is_empty() {
+                let depth = list_stack.len() - 1;
+                current.items.push(ListItem {
+                    tag: if arg.is_empty() {
+                        String::new()
+                    } else {
+                        format_nested_macros(arg)
+                    },
+                    body: String::new(),
+                    depth,
+                });
+                cur_item = Some(current.items.len() - 1);
             } else if !arg.is_empty() {
                 push_text(&mut current, arg.trim());
             }
@@ -594,23 +629,25 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
         }
 
         // .IP - indented paragraph (like .It but for .IP "tag")
-        // Creates a new list item with the tag
+        // 隐式开启一个列表（若无 .Bl），然后新建一个 item
         if line.starts_with(".IP")
             || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "IP")
         {
-            // Push previous item if exists
-            if current.in_list && !current.items.is_empty() {
-                // Keep current item, just add new content
+            if list_stack.is_empty() {
+                list_stack.push(cur_item);
             }
-            current.in_list = true;
-
+            let depth = list_stack.len() - 1;
             let arg = line.get(3..).unwrap_or("").trim();
-            if !arg.is_empty() {
-                let formatted = format_nested_macros(arg);
-                current.items.push(formatted);
-            } else {
-                current.items.push(String::new());
-            }
+            current.items.push(ListItem {
+                tag: if arg.is_empty() {
+                    String::new()
+                } else {
+                    format_nested_macros(arg)
+                },
+                body: String::new(),
+                depth,
+            });
+            cur_item = Some(current.items.len() - 1);
             continue;
         }
         // .Pp - 段落分隔
@@ -670,14 +707,20 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
             continue;
         }
 
-        // .TP - Tagged paragraph (hanging indent)
-        // The next line is the tag (bold), following lines are body
+        // .TP - Tagged paragraph (hanging indent)；隐式开启列表，新建空 tag item
         if line.starts_with(".TP")
             || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "TP")
         {
-            // Start a new item in the list for the tag
-            current.in_list = true;
-            current.items.push(String::new()); // Empty tag marker for TP
+            if list_stack.is_empty() {
+                list_stack.push(cur_item);
+            }
+            let depth = list_stack.len() - 1;
+            current.items.push(ListItem {
+                tag: String::new(),
+                body: String::new(),
+                depth,
+            });
+            cur_item = Some(current.items.len() - 1);
             continue;
         }
 
@@ -690,40 +733,41 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
             continue;
         }
 
-        // 在列表内处理 macro 行（重要：添加到 items 而不是 text）
+        // 在列表项内处理 macro 行：追加到当前 item 的 body（而非 text）
         // 但跳过控制性 macro 如 .PD, .TP 等
-        if current.in_list && line.starts_with('.') && line.len() > 2 {
-            // Skip control macros that shouldn't be added to list items
-            let macro_name = &line[1..3];
-            if matches!(
-                macro_name,
-                "PD" | "TP"
-                    | "Bl"
-                    | "El"
-                    | "It"
-                    | "PP"
-                    | "Sp"
-                    | "Rs"
-                    | "Re"
-                    | "IP"
-                    | "P"
-                    | "br"
-                    | "nf"
-                    | "fi"
-            ) {
-                continue;
-            }
-
-            let rest = if line.len() > 3 { line[3..].trim() } else { "" };
-            let formatted = format_macro(macro_name, rest);
-            if !formatted.is_empty() {
-                if let Some(last) = current.items.last_mut() {
-                    if !last.is_empty() {
-                        last.push(' ');
-                    }
-                    last.push_str(&formatted);
+        if let Some(idx) = cur_item {
+            if line.starts_with('.') && line.len() > 2 {
+                // Skip control macros that shouldn't be added to list items
+                let macro_name = &line[1..3];
+                if matches!(
+                    macro_name,
+                    "PD" | "TP"
+                        | "Bl"
+                        | "El"
+                        | "It"
+                        | "PP"
+                        | "Sp"
+                        | "Rs"
+                        | "Re"
+                        | "IP"
+                        | "P"
+                        | "br"
+                        | "nf"
+                        | "fi"
+                ) {
+                    continue;
                 }
-                continue;
+
+                let rest = if line.len() > 3 { line[3..].trim() } else { "" };
+                let formatted = format_macro(macro_name, rest);
+                if !formatted.is_empty() {
+                    let body = &mut current.items[idx].body;
+                    if !body.is_empty() {
+                        body.push(' ');
+                    }
+                    body.push_str(&formatted);
+                    continue;
+                }
             }
         }
         // .so FILE - source (include another file)
@@ -743,6 +787,8 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
                 {
                     doc.sections.push(current);
                     current = Section::default();
+                    list_stack.clear();
+                    cur_item = None;
                     have_section = true;
                 }
 
@@ -789,30 +835,25 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
         if line.starts_with('.') {
             continue;
         }
-        if current.in_list {
-            if let Some(last) = current.items.last_mut() {
-                let trimmed = line.trim();
-                if trimmed.starts_with('.') && trimmed.len() > 2 {
-                    let macro_part = &trimmed[1..3];
-                    let rest = if trimmed.len() > 3 { &trimmed[3..] } else { "" };
-                    let formatted = format_macro(macro_part, rest.trim());
-                    if !formatted.is_empty() {
-                        if !last.is_empty() {
-                            last.push(' ');
-                        }
-                        last.push_str(&formatted);
+        if let Some(idx) = cur_item {
+            let body = &mut current.items[idx].body;
+            let trimmed = line.trim();
+            if trimmed.starts_with('.') && trimmed.len() > 2 {
+                let macro_part = &trimmed[1..3];
+                let rest = if trimmed.len() > 3 { &trimmed[3..] } else { "" };
+                let formatted = format_macro(macro_part, rest.trim());
+                if !formatted.is_empty() {
+                    if !body.is_empty() {
+                        body.push(' ');
                     }
-                } else if !trimmed.is_empty() {
-                    let formatted = format_inline_macros(trimmed);
-                    if !last.is_empty() {
-                        last.push(' ');
-                    }
-                    last.push_str(&formatted);
+                    body.push_str(&formatted);
                 }
-            } else {
-                let trimmed = line.trim();
+            } else if !trimmed.is_empty() {
                 let formatted = format_inline_macros(trimmed);
-                current.items.push(formatted);
+                if !body.is_empty() {
+                    body.push(' ');
+                }
+                body.push_str(&formatted);
             }
         } else if line.trim().is_empty() {
             // Blank line = paragraph break
@@ -838,7 +879,16 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
             let arr = s
                 .items
                 .into_iter()
-                .map(|v| Value::String(v.trim().to_string()))
+                .map(|it| {
+                    let mut m = Map::new();
+                    m.insert("tag".to_string(), Value::String(it.tag));
+                    m.insert(
+                        "body".to_string(),
+                        Value::String(it.body.trim().to_string()),
+                    );
+                    m.insert("depth".to_string(), Value::from(it.depth));
+                    Value::Object(m)
+                })
                 .collect::<Vec<_>>();
             o.insert("items".to_string(), Value::Array(arr));
         }
@@ -990,12 +1040,25 @@ pub fn to_markdown(json: &Value) -> String {
             }
             if let Some(items) = sec.get("items").and_then(|v| v.as_array()) {
                 for item in items {
-                    if let Some(s) = item.as_str() {
-                        if !s.trim().is_empty() {
-                            out.push_str("- ");
-                            out.push_str(s.trim());
-                            out.push('\n');
+                    if let Some(o) = item.as_object() {
+                        let tag = o.get("tag").and_then(|v| v.as_str()).unwrap_or("");
+                        let body = o.get("body").and_then(|v| v.as_str()).unwrap_or("").trim();
+                        let depth = o.get("depth").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                        if tag.is_empty() && body.is_empty() {
+                            continue;
                         }
+                        let mut line = format!("{}- ", "  ".repeat(depth));
+                        if !tag.is_empty() {
+                            line.push_str(tag);
+                            if !body.is_empty() {
+                                line.push_str(": ");
+                                line.push_str(body);
+                            }
+                        } else {
+                            line.push_str(body);
+                        }
+                        out.push_str(&line);
+                        out.push('\n');
                     }
                 }
             }
@@ -1157,13 +1220,27 @@ pub fn view(json: &serde_json::Value, opts: &ViewOptions) -> String {
 
                     if let Some(items) = sec.get("items").and_then(|v| v.as_array()) {
                         for item in items {
-                            if let Some(s) = item.as_str() {
-                                let trimmed = s.trim();
-                                if !trimmed.is_empty() {
-                                    out.push_str("- ");
-                                    out.push_str(trimmed);
-                                    out.push('\n');
+                            if let Some(o) = item.as_object() {
+                                let tag = o.get("tag").and_then(|v| v.as_str()).unwrap_or("");
+                                let body =
+                                    o.get("body").and_then(|v| v.as_str()).unwrap_or("").trim();
+                                let depth =
+                                    o.get("depth").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                                if tag.is_empty() && body.is_empty() {
+                                    continue;
                                 }
+                                let mut line = format!("{}- ", "  ".repeat(depth));
+                                if !tag.is_empty() {
+                                    line.push_str(tag);
+                                    if !body.is_empty() {
+                                        line.push_str(": ");
+                                        line.push_str(body);
+                                    }
+                                } else {
+                                    line.push_str(body);
+                                }
+                                out.push_str(&line);
+                                out.push('\n');
                             }
                         }
                         out.push('\n');
