@@ -1,5 +1,6 @@
 # roff-cli
 
+[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/0/badge)](https://bestpractices.coreinfrastructure.org/projects/0)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/ljh-sh/roff/badge)](https://scorecard.dev/)
 [![CI](https://github.com/ljh-sh/roff/actions/workflows/ci.yml/badge.svg)](https://github.com/ljh-sh/roff/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/roff-cli.svg)](https://crates.io/crates/roff-cli)
