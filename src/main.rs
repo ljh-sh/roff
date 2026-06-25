@@ -49,13 +49,14 @@ fn cmd_tojson_help() -> ! {
     eprintln!("       roff tojson -- < file.1");
     eprintln!();
     eprintln!("Options:");
-    eprintln!("  --pretty         Pretty-print JSON output");
+    eprintln!("  --indent N       Pretty-print JSON with N spaces of indent (default: compact)");
     eprintln!("  --source-expand  Expand .so (source) includes");
     eprintln!("  -h, --help       Show this help message");
     eprintln!();
     eprintln!("Examples:");
-    eprintln!("  roff tojson file.1");
-    eprintln!("  roff tojson --pretty file.1");
+    eprintln!("  roff tojson file.1               # Compact JSON (default)");
+    eprintln!("  roff tojson --indent 2 file.1    # Pretty-print with 2-space indent");
+    eprintln!("  roff tojson --indent 4 file.1    # Pretty-print with 4-space indent");
     eprintln!("  roff tojson --source-expand file.1");
     eprintln!("  cat file.1 | roff tojson --");
     process::exit(0);
@@ -390,7 +391,7 @@ fn main() {
         return;
     }
 
-    let mut pretty = false;
+    let mut indent: Option<usize> = None;
     let mut files = Vec::new();
     let mut use_stdin = false;
     let mut source_expand = false;
@@ -402,8 +403,30 @@ fn main() {
                 "tomd" => cmd_tomd_help(),
                 _ => usage(),
             }
-        } else if args[i] == "--pretty" {
-            pretty = true;
+        } else if args[i] == "--indent" {
+            if i + 1 < args.len() {
+                match args[i + 1].parse::<usize>() {
+                    Ok(n) => {
+                        indent = Some(n);
+                        i += 1;
+                    }
+                    Err(_) => {
+                        eprintln!("Error: --indent requires a non-negative integer");
+                        process::exit(1);
+                    }
+                }
+            } else {
+                eprintln!("Error: --indent requires a value");
+                process::exit(1);
+            }
+        } else if let Some(val) = args[i].strip_prefix("--indent=") {
+            match val.parse::<usize>() {
+                Ok(n) => indent = Some(n),
+                Err(_) => {
+                    eprintln!("Error: --indent requires a non-negative integer");
+                    process::exit(1);
+                }
+            }
         } else if args[i] == "--source-expand" {
             source_expand = true;
         } else if args[i] == "--" {
@@ -441,10 +464,18 @@ fn main() {
                     None
                 };
                 let json = roff::parse_to_json_with_opts(&content, source_expand, base_path);
-                let out = if pretty {
-                    serde_json::to_string_pretty(&json).unwrap()
-                } else {
-                    serde_json::to_string(&json).unwrap()
+                let out = match indent {
+                    Some(n) => {
+                        let indent_str = " ".repeat(n);
+                        let formatter =
+                            serde_json::ser::PrettyFormatter::with_indent(indent_str.as_bytes());
+                        let mut buf = Vec::new();
+                        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
+                        use serde::Serialize;
+                        json.serialize(&mut ser).unwrap();
+                        String::from_utf8(buf).unwrap()
+                    }
+                    None => serde_json::to_string(&json).unwrap(),
                 };
                 if num_inputs > 1 {
                     outputs.push(format!("# File: {}\n{}", name, out));

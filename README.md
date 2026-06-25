@@ -77,7 +77,8 @@ roff bench --count 100      # benchmark parser on man pages
 
 ```bash
 roff tojson file.1
-roff tojson --pretty file.1
+roff tojson --indent 2 file.1           # pretty-print with 2-space indent
+roff tojson --indent 4 file.1           # pretty-print with 4-space indent
 roff tojson --source-expand file.1      # expand .so includes
 roff tojson -- < file.1                 # read from stdin
 ```
@@ -153,7 +154,7 @@ use roff::{parse_to_json, parse_to_string, to_markdown};
 let input = ".TH TEST 1\n.SH NAME\ntest \\- a test program";
 let json = parse_to_json(input);
 let md = to_markdown(&json);
-let s = parse_to_string(input, true);  // pretty JSON
+let s = parse_to_string(input, true);  // pretty JSON (2-space indent)
 ```
 
 ## Design

@@ -77,7 +77,8 @@ roff bench --count 100      # 在 man 页面上的解析器基准测试
 
 ```bash
 roff tojson file.1
-roff tojson --pretty file.1
+roff tojson --indent 2 file.1           # 2 空格缩进美化输出
+roff tojson --indent 4 file.1           # 4 空格缩进美化输出
 roff tojson --source-expand file.1      # 展开 .so 包含
 roff tojson -- < file.1                 # 从 stdin 读取
 ```

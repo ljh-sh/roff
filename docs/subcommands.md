@@ -12,8 +12,9 @@ roff has four commands: `tojson`, `tomd`, `view`, and `bench`. All read man page
 Convert man page(s) to JSON.
 
 ```bash
-roff tojson file.1
-roff tojson --pretty file.1
+roff tojson file.1               # compact JSON (default)
+roff tojson --indent 2 file.1    # pretty-print with 2-space indent
+roff tojson --indent 4 file.1    # pretty-print with 4-space indent
 roff tojson --source-expand file.1
 roff tojson -- < file.1
 ```
@@ -22,7 +23,7 @@ roff tojson -- < file.1
 
 | Option | Description |
 |--------|-------------|
-| `--pretty` | Pretty-print JSON output |
+| `--indent N` | Pretty-print JSON with N spaces of indent (default: compact) |
 | `--source-expand` | Expand `.so` (source) includes |
 | `-h, --help` | Show help message |
 
