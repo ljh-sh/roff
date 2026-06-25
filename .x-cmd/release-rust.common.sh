@@ -19,7 +19,7 @@ init_common() {
     fi
 
     BIN_NAME="${BIN_NAME:-app}"
-    BUILD_MODE="${BUILD_MODE:-native-first}"
+    BUILD_MODE="${BUILD_MODE:-zigbuild-first}"
 }
 
 get_targets() {
@@ -149,8 +149,8 @@ show_usage() {
     echo "  <target>         Build specific target (see below)"
     echo ""
     echo "Options:"
-    echo "  --zigbuild-first    Use zigbuild for all cross-compilation"
-    echo "  --native-first     Use native cargo when possible (default)"
+    echo "  --zigbuild-first    Use zigbuild for all targets (default)"
+    echo "  --native-first     Use native cargo for current platform only"
     echo ""
     echo "Targets:"
     echo "  win-x64          x86_64-pc-windows-gnu"
