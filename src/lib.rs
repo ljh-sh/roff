@@ -466,6 +466,36 @@ pub fn parse_to_json(input: &str) -> Value {
 /// 解析并可选展开 .so 文件
 /// base_path: 用于解析 .so 文件的相对路径
 pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Option<&str>) -> Value {
+    let mut visited = Vec::new();
+    let mut skipped = Vec::new();
+    let mut v = parse_inner(
+        input,
+        source_expand,
+        base_path,
+        &mut visited,
+        &mut skipped,
+        0,
+    );
+    if !skipped.is_empty() {
+        if let Some(obj) = v.as_object_mut() {
+            let arr = skipped.into_iter().map(Value::String).collect();
+            obj.insert("source_skipped".to_string(), Value::Array(arr));
+        }
+    }
+    v
+}
+
+/// `.so` 展开的递归深度上限：超过即停止并记入 `source_skipped`（#2）。
+const SOURCE_MAX_DEPTH: usize = 32;
+
+fn parse_inner(
+    input: &str,
+    source_expand: bool,
+    base_path: Option<&str>,
+    visited: &mut Vec<std::path::PathBuf>,
+    skipped: &mut Vec<String>,
+    depth: usize,
+) -> Value {
     let mut doc = Doc::default(); // 整个文档
     let mut current = Section::default(); // 当前正在处理的章节
     let mut have_section = bool::default(); // 是否已经有章节
@@ -826,13 +856,33 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
                         .unwrap_or_else(|| std::path::Path::new(".").to_path_buf());
                     let included_path = base_dir.join(filename);
 
-                    if let Ok(included_content) = std::fs::read_to_string(&included_path) {
-                        // Parse the included content
-                        let included_json = parse_to_json_with_opts(
+                    // cycle / depth guard (#2): canonicalize for cycle detection,
+                    // cap recursion depth, and record skips instead of overflowing.
+                    let canon = std::fs::canonicalize(&included_path).ok();
+                    let too_deep = depth >= SOURCE_MAX_DEPTH;
+                    let cycle = canon.as_ref().is_some_and(|c| visited.contains(c));
+                    if too_deep || cycle {
+                        let reason = if too_deep { "depth-limit" } else { "cycle" };
+                        let shown = canon
+                            .as_ref()
+                            .map(|c| c.to_string_lossy().to_string())
+                            .unwrap_or_else(|| filename.to_string());
+                        skipped.push(format!("{reason}: {shown}"));
+                    } else if let Ok(included_content) = std::fs::read_to_string(&included_path) {
+                        if let Some(c) = canon.as_ref() {
+                            visited.push(c.clone());
+                        }
+                        let included_json = parse_inner(
                             &included_content,
                             true,
                             included_path.to_str(),
+                            visited,
+                            skipped,
+                            depth + 1,
                         );
+                        if canon.is_some() {
+                            visited.pop();
+                        }
 
                         // Merge sections from included file into current document
                         if let Some(included_sections) =
