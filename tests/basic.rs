@@ -168,3 +168,30 @@ fn to_html_escapes_special_chars() {
     assert!(html.contains("&lt;b&gt;"));
     assert!(html.contains("&amp; amp"));
 }
+
+/// `.so` cycles must not stack-overflow: an indirect cycle (a -> b -> a) is
+/// detected and recorded in `source_skipped` instead of recursing forever. (#2)
+#[test]
+fn so_cycle_does_not_overflow() {
+    use std::fs;
+    let dir = std::env::temp_dir().join("roff-so-cycle-test");
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("a.1"), ".TH A 1\n.so b.1\n").unwrap();
+    fs::write(dir.join("b.1"), ".TH B 1\n.so a.1\n").unwrap();
+
+    let a = dir.join("a.1");
+    let content = fs::read_to_string(&a).unwrap();
+    let v = roff::parse_to_json_with_opts(&content, true, a.to_str());
+    let skipped = v
+        .get("source_skipped")
+        .and_then(|s| s.as_array())
+        .expect("cycle should be recorded in source_skipped");
+    assert!(
+        skipped
+            .iter()
+            .any(|s| s.as_str().unwrap_or("").contains("cycle")),
+        "expected a cycle marker, got {skipped:?}"
+    );
+    let _ = fs::remove_dir_all(&dir);
+}
