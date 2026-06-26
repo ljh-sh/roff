@@ -38,11 +38,20 @@ roff tojson -- < file.1
   "sections": [
     {"title": "NAME", "text": "ls — list directory contents"},
     {"title": "SYNOPSIS", "text": "ls [options] [file ...]"},
-    {"title": "OPTIONS", "items": ["-a: do not ignore entries starting with .", "-l: use a long listing format"]}
+    {"title": "OPTIONS", "items": [
+      {"tag": "-a", "body": "do not ignore entries starting with .", "depth": 0},
+      {"tag": "-l", "body": "use a long listing format", "depth": 0}
+    ]}
   ],
   "source": []
 }
 ```
+
+Each list item is an object with `tag` (the `.It`/`.IP`/`.TP` argument), `body`
+(the descriptive text), and `depth`. **Nested `.Bl` lists are preserved**: items
+inside an inner list get `depth ≥ 1`, so an inner `.El` no longer prematurely
+closes the outer list. Reconstruct the tree by walking items in order and
+tracking `depth`.
 
 When multiple files are given, each output is prefixed with `# File: <path>`.
 
@@ -85,8 +94,8 @@ ls [options] [file ...]
 
 # OPTIONS
 
-- `-a`: do not ignore entries starting with .
-- `-l`: use a long listing format
+- -a: do not ignore entries starting with .
+- -l: use a long listing format
 ```
 
 ---
