@@ -15,7 +15,7 @@ fn read_all_from_stdin() -> io::Result<String> {
 }
 
 fn usage() -> ! {
-    eprintln!("roff - Skillful man page to JSON/Markdown converter");
+    eprintln!("roff - Skillful man page to JSON/Markdown/HTML converter");
     eprintln!();
     eprintln!("Usage: roff [options] <command> [options] [arguments]");
     eprintln!();
@@ -26,12 +26,14 @@ fn usage() -> ! {
     eprintln!("Commands:");
     eprintln!("  tojson          Convert man file(s) to JSON");
     eprintln!("  tomd            Convert man file(s) to Markdown");
+    eprintln!("  tohtml          Convert man file(s) to HTML5");
     eprintln!("  view            Progressive disclosure view");
     eprintln!("  bench           Benchmark parser performance");
     eprintln!();
     eprintln!("Examples:");
     eprintln!("  roff tojson file.1           # Convert to JSON");
     eprintln!("  roff tomd file.1             # Convert to Markdown");
+    eprintln!("  roff tohtml file.1           # Convert to HTML");
     eprintln!("  roff view --synopsis file.1  # View synopsis only");
     eprintln!("  roff bench --all              # Benchmark all man files");
     eprintln!("  roff tojson -- < file.1      # Read from stdin");
@@ -76,6 +78,23 @@ fn cmd_tomd_help() -> ! {
     eprintln!("  roff tomd file.1");
     eprintln!("  roff tomd --source-expand file.1");
     eprintln!("  cat file.1 | roff tomd --");
+    process::exit(0);
+}
+
+fn cmd_tohtml_help() -> ! {
+    eprintln!("roff-tohtml - Convert man pages to HTML5");
+    eprintln!();
+    eprintln!("Usage: roff tohtml [options] <file>...");
+    eprintln!("       roff tohtml -- < file.1");
+    eprintln!();
+    eprintln!("Options:");
+    eprintln!("  --source-expand  Expand .so (source) includes");
+    eprintln!("  -h, --help       Show this help message");
+    eprintln!();
+    eprintln!("Examples:");
+    eprintln!("  roff tohtml file.1");
+    eprintln!("  roff tohtml --source-expand file.1");
+    eprintln!("  cat file.1 | roff tohtml --");
     process::exit(0);
 }
 
@@ -267,6 +286,7 @@ fn main() {
             match args[1].as_str() {
                 "tojson" => cmd_tojson_help(),
                 "tomd" => cmd_tomd_help(),
+                "tohtml" => cmd_tohtml_help(),
                 "view" => cmd_view_help(),
                 "bench" => cmd_bench_help(),
                 _ => {
@@ -401,6 +421,7 @@ fn main() {
             match cmd.as_str() {
                 "tojson" => cmd_tojson_help(),
                 "tomd" => cmd_tomd_help(),
+                "tohtml" => cmd_tohtml_help(),
                 _ => usage(),
             }
         } else if args[i] == "--indent" {
@@ -491,6 +512,20 @@ fn main() {
                 };
                 let json = roff::parse_to_json_with_opts(&content, source_expand, base_path);
                 let out = roff::to_markdown(&json);
+                if num_inputs > 1 {
+                    outputs.push(format!("# File: {}\n{}", name, out));
+                } else {
+                    outputs.push(out);
+                }
+            }
+            "tohtml" => {
+                let base_path = if name != "stdin" {
+                    Some(name.as_str())
+                } else {
+                    None
+                };
+                let json = roff::parse_to_json_with_opts(&content, source_expand, base_path);
+                let out = roff::to_html(&json);
                 if num_inputs > 1 {
                     outputs.push(format!("# File: {}\n{}", name, out));
                 } else {

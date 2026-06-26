@@ -66,6 +66,7 @@ The binary will be at `target/release/roff`.
 ```bash
 roff tojson file.1          # structured JSON
 roff tomd file.1            # readable Markdown
+roff tohtml file.1          # HTML5 for docs sites
 roff view --meta ls         # progressive disclosure view
 roff bench --count 100      # benchmark parser on man pages
 ```
@@ -95,7 +96,10 @@ Example output:
   "sections": [
     {"title": "NAME", "text": "ls — list directory contents"},
     {"title": "SYNOPSIS", "text": "ls [options] [file ...]"},
-    {"title": "OPTIONS", "items": ["-a: do not ignore entries starting with .", "-l: use a long listing format"]}
+    {"title": "OPTIONS", "items": [
+      {"tag": "-a", "body": "do not ignore entries starting with .", "depth": 0},
+      {"tag": "-l", "body": "use a long listing format", "depth": 0}
+    ]}
   ]
 }
 ```
@@ -108,6 +112,16 @@ roff tomd --source-expand file.1
 ```
 
 Output includes YAML front matter and clean Markdown sections.
+
+### Convert to HTML
+
+```bash
+roff tohtml file.1
+roff tohtml --source-expand file.1
+```
+
+Emits minimal HTML5 — front matter becomes `<meta>` tags, sections become `<h2>`,
+and lists become nested `<ul>`/`<li>`. All HTML-special characters are escaped.
 
 ### Progressive disclosure view
 

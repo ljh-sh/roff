@@ -1093,6 +1093,147 @@ pub fn to_markdown(json: &Value) -> String {
     out.trim_end().to_string()
 }
 
+/// 转义 HTML 特殊字符（&, <, >, ", '）。无外部依赖。
+fn escape_html(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#39;"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// 把扁平 + depth 的 items 渲染成嵌套 `<ul>`/`<li>` HTML（depth 来自 #25 的 items 结构）。
+fn render_items_html(items: &[Value], out: &mut String) {
+    let mut cur_depth: i64 = -1; // 当前所在 item 深度；-1 = 还没开始
+    let mut li_open = false;
+    for item in items {
+        let Some(o) = item.as_object() else { continue };
+        let tag = o.get("tag").and_then(|v| v.as_str()).unwrap_or("");
+        let body = o.get("body").and_then(|v| v.as_str()).unwrap_or("").trim();
+        let d = o.get("depth").and_then(|v| v.as_u64()).unwrap_or(0) as i64;
+        if tag.is_empty() && body.is_empty() {
+            continue;
+        }
+        if d > cur_depth {
+            // 下降：在当前 <li> 内打开 (d - cur_depth) 层 <ul>，不闭合 li
+            for _ in 0..(d - cur_depth) {
+                out.push_str("<ul>\n");
+            }
+        } else {
+            if li_open {
+                out.push_str("</li>\n");
+            }
+            if d < cur_depth {
+                // 上升：逐层 </ul></li>，回到目标深度的兄弟位置
+                for _ in 0..(cur_depth - d) {
+                    out.push_str("</ul>\n</li>\n");
+                }
+            }
+        }
+        cur_depth = d;
+        out.push_str("<li>");
+        if !tag.is_empty() {
+            out.push_str("<code>");
+            out.push_str(&escape_html(tag));
+            out.push_str("</code>");
+            if !body.is_empty() {
+                out.push_str(": ");
+                out.push_str(&escape_html(body));
+            }
+        } else {
+            out.push_str(&escape_html(body));
+        }
+        li_open = true;
+    }
+    if li_open {
+        out.push_str("</li>\n");
+    }
+    // 关闭剩余 (cur_depth + 1) 层 <ul>
+    for _ in 0..(cur_depth + 1) {
+        out.push_str("</ul>\n");
+    }
+}
+
+/// 将 man 文档 JSON 转换为最小 HTML5。
+/// YAML front matter 等价物渲染为 `<meta>` 标签；section -> `<h2>`，段落 -> `<p>`，
+/// items -> 嵌套 `<ul>`/`<li>`。无新增依赖。
+pub fn to_html(json: &Value) -> String {
+    let mut out = String::new();
+    out.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n");
+
+    let title = json.get("title").and_then(|v| v.as_str());
+    let section = json.get("section").and_then(|v| v.as_str());
+    let name = json.get("name").and_then(|v| v.as_str());
+    let desc = json.get("description").and_then(|v| v.as_str());
+    let date = json.get("date").and_then(|v| v.as_str());
+
+    for (key, val) in [
+        ("title", title),
+        ("section", section),
+        ("name", name),
+        ("description", desc),
+        ("date", date),
+    ] {
+        if let Some(v) = val {
+            out.push_str(&format!(
+                "<meta name=\"{key}\" content=\"{}\">\n",
+                escape_html(v)
+            ));
+        }
+    }
+    if let Some(t) = title {
+        out.push_str(&format!("<title>{}</title>\n", escape_html(t)));
+    }
+    out.push_str("</head>\n<body>\n");
+
+    if let Some(t) = title {
+        out.push_str(&format!("<h1>{}</h1>\n", escape_html(t)));
+    }
+    if let Some(n) = name {
+        out.push_str("<p><strong>");
+        out.push_str(&escape_html(n));
+        out.push_str("</strong>");
+        if let Some(d) = desc {
+            out.push_str(" — ");
+            out.push_str(&escape_html(d));
+        }
+        out.push_str("</p>\n");
+    }
+
+    if let Some(sections) = json.get("sections").and_then(|v| v.as_array()) {
+        for sec in sections {
+            if let Some(t) = sec.get("title").and_then(|v| v.as_str()) {
+                if !t.is_empty() {
+                    out.push_str(&format!("<h2>{}</h2>\n", escape_html(t)));
+                }
+            }
+            if let Some(text) = sec.get("text").and_then(|v| v.as_str()) {
+                for para in text.split('\n') {
+                    let p = para.trim();
+                    if !p.is_empty() {
+                        out.push_str(&format!("<p>{}</p>\n", escape_html(p)));
+                    }
+                }
+            }
+            if let Some(items) = sec.get("items").and_then(|v| v.as_array()) {
+                if !items.is_empty() {
+                    render_items_html(items, &mut out);
+                }
+            }
+        }
+    }
+
+    out.push_str("</body>\n</html>\n");
+    out
+}
+
 #[derive(Default)]
 pub struct ViewOptions {
     pub description: bool,
