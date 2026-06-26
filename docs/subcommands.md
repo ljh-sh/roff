@@ -78,10 +78,10 @@ roff tomd -- < file.1
 
 ```markdown
 ---
-title: LS
+title: "LS"
 section: "1"
-name: ls
-description: list directory contents
+name: "ls"
+description: "list directory contents"
 ---
 
 # NAME
