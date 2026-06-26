@@ -1,0 +1,78 @@
+name: Reproducible build
+
+# Verifies release artifacts are byte-stable: same source + Cargo.lock +
+# rust-toolchain.toml -> identical sha256 on every build. Depends on the
+# reproducible-build prerequisites from #24 (rust-toolchain.toml + --locked).
+# On tag push / manual dispatch: all 7 release targets. On PR: a single
+# linux-musl target (cheap drift check); the full matrix runs at release time.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions: read-all
+
+env:
+  CARGO_TERM_COLOR: always
+  SOURCE_DATE_EPOCH: 1700000000
+  TZ: UTC
+  LC_ALL: C
+
+jobs:
+  verify:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ github.event_name == 'pull_request' && fromJson('[{"target":"x86_64-unknown-linux-musl","os":"ubuntu-latest","cross":true}]') || fromJson('[{"target":"x86_64-unknown-linux-musl","os":"ubuntu-latest","cross":true},{"target":"aarch64-unknown-linux-musl","os":"ubuntu-latest","cross":true},{"target":"x86_64-unknown-linux-gnu","os":"ubuntu-latest","cross":true},{"target":"aarch64-unknown-linux-gnu","os":"ubuntu-latest","cross":true},{"target":"x86_64-pc-windows-gnu","os":"ubuntu-latest","cross":true},{"target":"x86_64-apple-darwin","os":"macos-latest","cross":false},{"target":"aarch64-apple-darwin","os":"macos-latest","cross":false}]') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@4d1965c9142484e48d40c19de54b5cba84953a06 # v1.10.0
+        with:
+          # toolchain channel is pinned in rust-toolchain.toml for reproducible builds (#24)
+          target: ${{ matrix.target }}
+
+      - name: Install cargo-zigbuild
+        if: matrix.cross
+        run: pip install cargo-zigbuild
+
+      - name: Build twice and compare sha256
+        run: |
+          SYSROOT="$(rustc --print sysroot)"
+          export RUSTFLAGS="--remap-path-prefix=${{ github.workspace }}=. --remap-path-prefix=$SYSROOT=/rust --remap-path-prefix=$HOME/.cargo=/cargo"
+          build () {
+            local dir="$1"
+            if [ "${{ matrix.cross }}" = "true" ]; then
+              cargo zigbuild --release --locked --target ${{ matrix.target }} --target-dir "$dir"
+            else
+              cargo build --release --locked --target ${{ matrix.target }} --target-dir "$dir"
+            fi
+          }
+          build /tmp/r1
+          build /tmp/r2
+          bin=roff
+          case "${{ matrix.target }}" in *-windows-*) bin=roff.exe ;; esac
+          h1=$(sha256sum "/tmp/r1/${{ matrix.target }}/release/$bin" | awk '{print $1}')
+          h2=$(sha256sum "/tmp/r2/${{ matrix.target }}/release/$bin" | awk '{print $1}')
+          echo "build1 sha256: $h1"
+          echo "build2 sha256: $h2"
+          printf '%s  build1\n%s  build2\n' "$h1" "$h2" > "reproducible-${{ matrix.target }}.txt"
+          if [ "$h1" != "$h2" ]; then
+            echo "::error::Non-reproducible build for ${{ matrix.target }}: $h1 != $h2"
+            exit 1
+          fi
+          echo "::notice::${{ matrix.target }} is reproducible ($h1)"
+
+      - name: Upload hashes
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: reproducible-${{ matrix.target }}
+          path: reproducible-${{ matrix.target }}.txt
+          if-no-files-found: ignore
