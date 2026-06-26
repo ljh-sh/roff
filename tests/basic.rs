@@ -228,3 +228,34 @@ fn to_markdown_env_is_yaml_sequence() {
         "env items must be a sequence"
     );
 }
+
+/// `view --all --outline-head N` must still produce an outline of EVERY
+/// section, not an empty one (--all had already marked them all shown). (#5)
+#[test]
+fn view_all_with_outline_head_lists_every_section() {
+    let json = parse_to_json(NESTED);
+    let opts = roff::ViewOptions {
+        all: true,
+        outline_head: Some(3),
+        ..Default::default()
+    };
+    let out = roff::view(&json, &opts);
+    assert!(out.contains("## Outline"), "outline section must appear");
+    assert!(
+        out.contains("### OPTIONS"),
+        "outline must list OPTIONS even though --all already showed it:\n{out}"
+    );
+}
+
+/// `--outline-head 0` means "outline only, no head preview" (not an empty outline). (#5)
+#[test]
+fn view_outline_head_zero_is_titles_only() {
+    let json = parse_to_json(NESTED);
+    let opts = roff::ViewOptions {
+        outline_head: Some(0),
+        ..Default::default()
+    };
+    let out = roff::view(&json, &opts);
+    assert!(out.contains("## Outline"));
+    assert!(out.contains("### OPTIONS"));
+}

@@ -1483,22 +1483,23 @@ pub fn view(json: &serde_json::Value, opts: &ViewOptions) -> String {
         if let Some(sections) = json.get("sections").and_then(|v| v.as_array()) {
             let head_lines = opts.outline_head.unwrap_or(0);
             let show_heads = head_lines > 0;
+            // --outline-head N (any N, including 0) outlines EVERY section (with up
+            // to N preview lines); plain --outline lists only sections not already
+            // shown. Fixes `--all --outline-head N` producing an empty outline. (#5)
+            let show_all = opts.outline_head.is_some();
 
-            if opts.outline && !show_heads {
-                out.push_str("## Outline\n\n");
-            }
+            out.push_str("## Outline\n\n");
 
             for sec in sections {
                 if let Some(title) = sec.get("title").and_then(|v| v.as_str()) {
-                    if !shown_sections.contains(title) {
+                    if show_all || !shown_sections.contains(title) {
                         out.push_str("### ");
                         out.push_str(title);
                         out.push_str("\n\n");
 
                         if show_heads {
                             if let Some(text) = sec.get("text").and_then(|v| v.as_str()) {
-                                let lines: Vec<&str> = text.lines().take(head_lines).collect();
-                                for line in lines {
+                                for line in text.lines().take(head_lines) {
                                     let l = line.trim();
                                     if !l.is_empty() {
                                         out.push_str(l);
