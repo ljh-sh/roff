@@ -138,3 +138,33 @@ fn parse_tp_tag_body_separation() {
         "multi-line body must join into one item"
     );
 }
+
+#[test]
+fn to_html_well_formed() {
+    let html = roff::to_html(&parse_to_json(NESTED));
+    assert!(html.starts_with("<!DOCTYPE html>"));
+    assert!(html.contains("<html lang=\"en\">"));
+    assert!(html.contains("<meta charset=\"utf-8\">"));
+    // front matter -> <meta> tags
+    assert!(html.contains("<meta name=\"title\" content=\"TOOL\">"));
+    assert!(html.contains("<meta name=\"name\" content=\"tool\">"));
+    // document + section structure
+    assert!(html.contains("<h1>TOOL</h1>"));
+    assert!(html.contains("<h2>OPTIONS</h2>"));
+    // tags render as <code>; nested item present
+    assert!(html.contains("<li><code>"));
+    assert!(html.contains("--fast"));
+    assert!(html.trim_end().ends_with("</html>"));
+}
+
+#[test]
+fn to_html_escapes_special_chars() {
+    let src = ".Dt T 1\n.Sh NAME\n.Nm t\n.Nd a <b> tag & amp\n";
+    let html = roff::to_html(&parse_to_json(src));
+    assert!(
+        !html.contains("<b> tag"),
+        "raw < must be escaped, got: {html:?}"
+    );
+    assert!(html.contains("&lt;b&gt;"));
+    assert!(html.contains("&amp; amp"));
+}

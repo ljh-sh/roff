@@ -100,6 +100,29 @@ ls [options] [file ...]
 
 ---
 
+## `roff tohtml`
+
+Convert man page(s) to minimal HTML5 (useful for documentation sites).
+
+```bash
+roff tohtml file.1
+roff tohtml --source-expand file.1
+roff tohtml -- < file.1
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--source-expand` | Expand `.so` (source) includes |
+| `-h, --help` | Show help message |
+
+Front matter is rendered as `<meta>` tags; sections become `<h2>`, paragraphs
+`<p>`, and lists nested `<ul>`/`<li>`. No new dependencies; all HTML-special
+characters (`&`, `<`, `>`, `"`, `'`) are escaped.
+
+---
+
 ## `roff view`
 
 Progressively disclose parts of a man page. Use it to grab just the synopsis, options, or outline for an LLM prompt.
