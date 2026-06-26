@@ -94,3 +94,47 @@ fn parse_nested_list_depths() {
         assert!(it.get("body").is_some());
     }
 }
+
+const TP: &str = r#"
+.Dd June 26, 2026
+.Dt TOOL 1
+.Os
+.Sh OPTIONS
+.TP
+.B \-a
+Do not ignore entries starting with a dot.
+This includes hidden files too.
+.TP
+.B \-l
+Use a long listing format.
+"#;
+
+/// `.TP`: the next line is the tag, subsequent lines join into the body, and
+/// items must not bleed across `.TP` boundaries. (regression for #26)
+#[test]
+fn parse_tp_tag_body_separation() {
+    let v = parse_to_json(TP);
+    let opts = v
+        .get("sections")
+        .and_then(|s| s.as_array())
+        .unwrap()
+        .iter()
+        .find(|s| s.get("title").and_then(|t| t.as_str()) == Some("OPTIONS"))
+        .expect("OPTIONS section");
+    let items = opts.get("items").unwrap().as_array().unwrap();
+    assert_eq!(items.len(), 2, "no bleed across .TP boundaries");
+
+    let first = &items[0];
+    let tag = first.get("tag").and_then(|t| t.as_str()).unwrap();
+    let body = first.get("body").and_then(|b| b.as_str()).unwrap();
+    assert!(tag.contains("-a"), "tag should hold the flag, got {tag:?}");
+    assert!(
+        !tag.contains("Do not ignore"),
+        "tag must not include body text"
+    );
+    assert!(body.contains("Do not ignore"));
+    assert!(
+        body.contains("hidden files too"),
+        "multi-line body must join into one item"
+    );
+}

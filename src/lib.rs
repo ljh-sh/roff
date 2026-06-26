@@ -436,6 +436,26 @@ fn is_inline_macro(name: &str) -> bool {
     )
 }
 
+/// 开始一个新的带标签列表项（.IP / .TP 共用）：确保存在列表帧（无 .Bl 时隐式开启），
+/// push 一个空 body 的 item，并把 cur_item 指向它。
+fn start_tagged_item(
+    current: &mut Section,
+    list_stack: &mut Vec<Option<usize>>,
+    cur_item: &mut Option<usize>,
+    tag: String,
+) {
+    if list_stack.is_empty() {
+        list_stack.push(*cur_item);
+    }
+    let depth = list_stack.len() - 1;
+    current.items.push(ListItem {
+        tag,
+        body: String::new(),
+        depth,
+    });
+    *cur_item = Some(current.items.len() - 1);
+}
+
 /// 将 man 文档内容解析为 JSON Value
 /// 这是核心解析函数，逐行处理 roff macro
 /// source_expand: 是否展开 .so 包含的文件
@@ -456,6 +476,8 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
     // in_list ⇔ !list_stack.is_empty()；item 的 depth = list_stack.len() - 1。
     let mut list_stack: Vec<Option<usize>> = Vec::new();
     let mut cur_item: Option<usize> = None;
+    // .TP 的标签来自「下一行」：见到 .TP 后置 true，下一行内容写入 item.tag 而非 body。
+    let mut pending_tp_tag = false;
 
     // 逐行解析输入
     for raw in input.lines() {
@@ -609,6 +631,7 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
         if line.starts_with(".It")
             || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "It")
         {
+            pending_tp_tag = false; // 新 item 取代任何待决的 .TP 标签
             let arg = line.get(3..).unwrap_or("").trim();
             if !list_stack.is_empty() {
                 let depth = list_stack.len() - 1;
@@ -628,26 +651,18 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
             continue;
         }
 
-        // .IP - indented paragraph (like .It but for .IP "tag")
-        // 隐式开启一个列表（若无 .Bl），然后新建一个 item
+        // .IP - indented paragraph；tag = 第一个参数，与 .TP 共用 start_tagged_item
         if line.starts_with(".IP")
             || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "IP")
         {
-            if list_stack.is_empty() {
-                list_stack.push(cur_item);
-            }
-            let depth = list_stack.len() - 1;
             let arg = line.get(3..).unwrap_or("").trim();
-            current.items.push(ListItem {
-                tag: if arg.is_empty() {
-                    String::new()
-                } else {
-                    format_nested_macros(arg)
-                },
-                body: String::new(),
-                depth,
-            });
-            cur_item = Some(current.items.len() - 1);
+            let tag = if arg.is_empty() {
+                String::new()
+            } else {
+                format_nested_macros(arg)
+            };
+            start_tagged_item(&mut current, &mut list_stack, &mut cur_item, tag);
+            pending_tp_tag = false;
             continue;
         }
         // .Pp - 段落分隔
@@ -707,20 +722,12 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
             continue;
         }
 
-        // .TP - Tagged paragraph (hanging indent)；隐式开启列表，新建空 tag item
+        // .TP - Tagged paragraph (hanging indent)；tag 来自下一行（pending_tp_tag）
         if line.starts_with(".TP")
             || (line.len() >= 3 && line.starts_with(".") && &line[1..3] == "TP")
         {
-            if list_stack.is_empty() {
-                list_stack.push(cur_item);
-            }
-            let depth = list_stack.len() - 1;
-            current.items.push(ListItem {
-                tag: String::new(),
-                body: String::new(),
-                depth,
-            });
-            cur_item = Some(current.items.len() - 1);
+            start_tagged_item(&mut current, &mut list_stack, &mut cur_item, String::new());
+            pending_tp_tag = true;
             continue;
         }
 
@@ -731,6 +738,25 @@ pub fn parse_to_json_with_opts(input: &str, source_expand: bool, base_path: Opti
         {
             // Just skip, don't close the list
             continue;
+        }
+
+        // .TP 的标签 = 紧随其后的一行（文本或字体 macro）；写入 tag 而非 body。
+        // 无论该行是否成功填入 tag，pending 都在这里消费掉，避免跨边界残留。
+        if pending_tp_tag {
+            pending_tp_tag = false;
+            if let Some(idx) = cur_item {
+                let formatted = if line.starts_with('.') && line.len() > 2 {
+                    let macro_part = &line[1..3];
+                    let rest = if line.len() > 3 { line[3..].trim() } else { "" };
+                    format_inline_macros(&format_macro(macro_part, rest))
+                } else {
+                    format_inline_macros(line.trim())
+                };
+                if !formatted.is_empty() {
+                    current.items[idx].tag = formatted;
+                }
+                continue;
+            }
         }
 
         // 在列表项内处理 macro 行：追加到当前 item 的 body（而非 text）
