@@ -195,3 +195,36 @@ fn so_cycle_does_not_overflow() {
     );
     let _ = fs::remove_dir_all(&dir);
 }
+
+/// YAML front matter must escape `:` and `"` so a description like
+/// `list: a "q" value` produces valid (quoted) YAML. (#4)
+#[test]
+fn to_markdown_frontmatter_escapes_yaml_special_chars() {
+    let src = ".Dt T 1\n.Sh NAME\n.Nm t\n.Nd list: a \"q\" value\n";
+    let md = roff::to_markdown(&roff::parse_to_json(src));
+    let desc_line = md
+        .lines()
+        .find(|l| l.starts_with("description:"))
+        .expect("description front matter");
+    assert_eq!(
+        desc_line, "description: \"list: a \\\"q\\\" value\"",
+        "value must be quoted with internal quotes escaped"
+    );
+}
+
+/// `env` is emitted as a proper YAML sequence, not a `VAR: true` mapping. (#4)
+#[test]
+fn to_markdown_env_is_yaml_sequence() {
+    let src = ".Dt T 1\n.Sh NAME\n.Nm t\n.Nd demo\n.Sh ENVIRONMENT\n.Ev FOO\n.Ev BAR\n";
+    let md = roff::to_markdown(&roff::parse_to_json(src));
+    let env_block: Vec<&str> = md
+        .lines()
+        .skip_while(|l| !l.starts_with("env:"))
+        .take_while(|l| l.starts_with("env:") || l.starts_with("  - "))
+        .collect();
+    assert_eq!(env_block[0], "env:");
+    assert!(
+        env_block[1..].iter().all(|l| l.starts_with("  - ")),
+        "env items must be a sequence"
+    );
+}

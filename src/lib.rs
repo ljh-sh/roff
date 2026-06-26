@@ -1012,43 +1012,55 @@ pub fn parse_to_string(input: &str, pretty: bool) -> String {
     }
 }
 
+/// 把字符串转成 YAML 双引号标量：转义 `\`、`"`、换行、制表符后用双引号包裹。
+/// 这样含 `:` 或特殊字符的值（如 `.Nd` 描述、带冒号的标题）不会破坏 front matter（#4）。
+fn yaml_scalar(s: &str) -> String {
+    let escaped = s
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\t', "\\t");
+    format!("\"{escaped}\"")
+}
+
 pub fn to_markdown(json: &Value) -> String {
     let mut out = String::new();
 
     out.push_str("---\n");
     if let Some(t) = json.get("title").and_then(|v| v.as_str()) {
         out.push_str("title: ");
-        out.push_str(t);
+        out.push_str(&yaml_scalar(t));
         out.push('\n');
     }
     if let Some(s) = json.get("section").and_then(|v| v.as_str()) {
         out.push_str("section: ");
-        out.push_str(s);
+        out.push_str(&yaml_scalar(s));
         out.push('\n');
     }
     if let Some(n) = json.get("name").and_then(|v| v.as_str()) {
         out.push_str("name: ");
-        out.push_str(n);
+        out.push_str(&yaml_scalar(n));
         out.push('\n');
     }
     if let Some(d) = json.get("description").and_then(|v| v.as_str()) {
         out.push_str("description: ");
-        out.push_str(d);
+        out.push_str(&yaml_scalar(d));
         out.push('\n');
     }
     if let Some(date) = json.get("date").and_then(|v| v.as_str()) {
         out.push_str("date: ");
-        out.push_str(date);
+        out.push_str(&yaml_scalar(date));
         out.push('\n');
     }
     if let Some(envs) = json.get("envs").and_then(|v| v.as_array()) {
         if !envs.is_empty() {
+            // list form (proper YAML sequence) rather than a VAR: true mapping
             out.push_str("env:\n");
             for env in envs {
                 if let Some(e) = env.as_str() {
-                    out.push_str("  ");
-                    out.push_str(e);
-                    out.push_str(": true\n");
+                    out.push_str("  - ");
+                    out.push_str(&yaml_scalar(e));
+                    out.push('\n');
                 }
             }
         }
@@ -1059,7 +1071,7 @@ pub fn to_markdown(json: &Value) -> String {
             for xref in xrefs {
                 if let Some(x) = xref.as_str() {
                     out.push_str("  - ");
-                    out.push_str(x);
+                    out.push_str(&yaml_scalar(x));
                     out.push('\n');
                 }
             }
