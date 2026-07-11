@@ -31,7 +31,7 @@ jobs:
         include: ${{ github.event_name == 'pull_request' && fromJson('[{"target":"x86_64-unknown-linux-musl","os":"ubuntu-latest","cross":true}]') || fromJson('[{"target":"x86_64-unknown-linux-musl","os":"ubuntu-latest","cross":true},{"target":"aarch64-unknown-linux-musl","os":"ubuntu-latest","cross":true},{"target":"x86_64-unknown-linux-gnu","os":"ubuntu-latest","cross":true},{"target":"aarch64-unknown-linux-gnu","os":"ubuntu-latest","cross":true},{"target":"x86_64-pc-windows-gnu","os":"ubuntu-latest","cross":true},{"target":"x86_64-apple-darwin","os":"macos-latest","cross":false},{"target":"aarch64-apple-darwin","os":"macos-latest","cross":false}]') }}
     steps:
       - name: Checkout
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@4d1965c9142484e48d40c19de54b5cba84953a06 # v1.10.0
