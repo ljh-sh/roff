@@ -3,7 +3,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/ljh-sh/roff/badge)](https://scorecard.dev/)
 [![CI](https://github.com/ljh-sh/roff/actions/workflows/ci.yml/badge.svg)](https://github.com/ljh-sh/roff/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/roff-cli.svg)](https://crates.io/crates/roff-cli)
-[![Docs](https://img.shields.io/badge/Docs-website-blue.svg)](https://ljh-sh.github.io/roff)
+[![Docs](https://img.shields.io/badge/Docs-website-blue.svg)](https://roff.ljh.sh)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 > 精巧的 man page 转 JSON/Markdown 工具 —— 人可读、AI 友好。
@@ -12,7 +12,7 @@
 
 镜像: [github.com/ljh-sh/roff](https://github.com/ljh-sh/roff) · [codeberg.org/ljh-sh/roff](https://codeberg.org/ljh-sh/roff)
 
-文档: [ljh-sh.github.io/roff](https://ljh-sh.github.io/roff)
+文档: [roff.ljh.sh](https://roff.ljh.sh)
 
 ## 给 AI 代理
 
@@ -170,7 +170,7 @@ roff tomd git-push.1 | grep -A5 "## OPTIONS"
 
 ## 常见问题
 
-详见 [docs/faq.md](docs/faq.md) 或 [线上常见问题](https://ljh-sh.github.io/roff/faq)，了解支持的格式、`.so` 展开、manpath 搜索、性能、stdin 处理等。
+详见 [docs/faq.md](docs/faq.md) 或 [线上常见问题](https://roff.ljh.sh/faq)，了解支持的格式、`.so` 展开、manpath 搜索、性能、stdin 处理等。
 
 ### 支持哪些 roff 方言？
 
