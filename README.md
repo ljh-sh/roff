@@ -4,7 +4,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/ljh-sh/roff/badge)](https://scorecard.dev/)
 [![CI](https://github.com/ljh-sh/roff/actions/workflows/ci.yml/badge.svg)](https://github.com/ljh-sh/roff/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/roff-cli.svg)](https://crates.io/crates/roff-cli)
-[![Docs](https://img.shields.io/badge/Docs-website-blue.svg)](https://ljh-sh.github.io/roff)
+[![Docs](https://img.shields.io/badge/Docs-website-blue.svg)](https://roff.ljh.sh)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 > Skillful man page to JSON/Markdown converter — human readable, AI-friendly.
@@ -13,7 +13,7 @@
 
 Mirrors: [github.com/ljh-sh/roff](https://github.com/ljh-sh/roff) · [codeberg.org/ljh-sh/roff](https://codeberg.org/ljh-sh/roff)
 
-Docs: [ljh-sh.github.io/roff](https://ljh-sh.github.io/roff)
+Docs: [roff.ljh.sh](https://roff.ljh.sh)
 
 ## For AI agents
 
@@ -171,7 +171,7 @@ This keeps `roff --help` short and the tool cheap to use as an LLM tool.
 
 ## FAQ
 
-See [docs/faq.md](docs/faq.md) or the [published FAQ](https://ljh-sh.github.io/roff/faq) for answers about supported formats, `.so` expansion, manpath search, performance, stdin handling, and more.
+See [docs/faq.md](docs/faq.md) or the [published FAQ](https://roff.ljh.sh/faq) for answers about supported formats, `.so` expansion, manpath search, performance, stdin handling, and more.
 
 ### What roff dialects are supported?
 
